@@ -8,7 +8,6 @@ import 'package:tuple/tuple.dart';
 import '../models/documents/attribute.dart';
 import '../models/documents/nodes/container.dart' as container;
 import '../models/documents/nodes/leaf.dart' as leaf;
-import '../models/documents/nodes/leaf.dart';
 import '../models/documents/nodes/line.dart';
 import '../models/documents/nodes/node.dart';
 import '../utils/color.dart';
@@ -38,15 +37,15 @@ class TextLine extends StatelessWidget {
     assert(debugCheckHasMediaQuery(context));
 
     if (line.hasEmbed) {
-      final embed = line.children.single as Embed;
+      final embed = line.children.single as leaf.Embed;
       return EmbedProxy(embedBuilder(context, embed));
     }
 
     final textSpan = _buildTextSpan(context);
     final strutStyle = StrutStyle.fromTextStyle(textSpan.style!);
     final textAlign = _getTextAlign();
-    final child = RichText(
-      text: textSpan,
+    final child = Text.rich(
+      textSpan,
       textAlign: textAlign,
       textDirection: textDirection,
       strutStyle: strutStyle,
@@ -88,6 +87,25 @@ class TextLine extends StatelessWidget {
 
     if (line.style.containsKey(Attribute.placeholder.key)) {
       textStyle = defaultStyles.placeHolder!.style;
+      return TextSpan(children: children, style: textStyle);
+    }
+
+    if (line.style.containsKey(Attribute.title.key)){
+      textStyle = defaultStyles.title!.style;
+      final titleAttr = line.style.attributes[Attribute.title.key];
+      final placeholder = titleAttr!.value ?? '';
+      if (children.isEmpty && placeholder.isNotEmpty){
+        return TextSpan(
+          children: [
+            WidgetSpan(
+              child: Text(placeholder,
+                style: textStyle.merge(const TextStyle(color: Colors.black26))
+              )
+            )
+          ],
+          style: textStyle
+        );
+      }
       return TextSpan(children: children, style: textStyle);
     }
 

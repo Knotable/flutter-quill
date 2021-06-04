@@ -37,6 +37,7 @@ class Attribute<T> {
     Attribute.height.key: Attribute.height,
     Attribute.style.key: Attribute.style,
     Attribute.token.key: Attribute.token,
+    Attribute.title.key: Attribute.title,
   });
 
   static final BoldAttribute bold = BoldAttribute();
@@ -78,6 +79,8 @@ class Attribute<T> {
   static final StyleAttribute style = StyleAttribute(null);
 
   static final TokenAttribute token = TokenAttribute('');
+
+  static final TitleAttribute title = TitleAttribute('');
 
   static final Set<String> inlineKeys = {
     Attribute.bold.key,
@@ -249,6 +252,10 @@ class BackgroundAttribute extends Attribute<String?> {
 /// This is custom attribute for hint
 class PlaceholderAttribute extends Attribute<bool> {
   PlaceholderAttribute() : super('placeholder', AttributeScope.INLINE, true);
+}
+
+class TitleAttribute extends Attribute<String> {
+  TitleAttribute(String val) : super('title', AttributeScope.BLOCK, val);
 }
 
 class HeaderAttribute extends Attribute<int?> {
