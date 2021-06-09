@@ -99,7 +99,7 @@ class TextLine extends StatelessWidget {
           children: [
             WidgetSpan(
               child: Text(placeholder,
-                style: textStyle.merge(const TextStyle(color: Colors.black26))
+                style: textStyle.merge(const TextStyle(color: Colors.grey))
               )
             )
           ],
