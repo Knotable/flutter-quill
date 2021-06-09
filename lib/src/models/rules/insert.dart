@@ -81,7 +81,10 @@ class PreserveBlockStyleOnInsertRule extends InsertRule {
     final lineStyle =
         Style.fromJson(nextNewLine.item1?.attributes ?? <String, dynamic>{});
 
-    final blockStyle = lineStyle.getBlocksExceptHeader();
+    final blockStyle = <String, dynamic>{};
+    for (final attr in lineStyle.getBlocksExceptHeader().values) {
+      blockStyle.addAll(attr.toJson());
+    }
     // Are we currently in a block? If not then ignore.
     if (blockStyle.isEmpty) {
       return null;
