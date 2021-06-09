@@ -44,8 +44,8 @@ class TextLine extends StatelessWidget {
     final textSpan = _buildTextSpan(context);
     final strutStyle = StrutStyle.fromTextStyle(textSpan.style!);
     final textAlign = _getTextAlign();
-    final child = Text.rich(
-      textSpan,
+    final child = RichText(
+      text: textSpan,
       textAlign: textAlign,
       textDirection: textDirection,
       strutStyle: strutStyle,
@@ -133,11 +133,22 @@ class TextLine extends StatelessWidget {
     return TextSpan(children: children, style: textStyle);
   }
 
-  TextSpan _getTextSpanFromNode(DefaultStyles defaultStyles, Node node) {
+  InlineSpan _getTextSpanFromNode(DefaultStyles defaultStyles, Node node) {
     final textNode = node as leaf.Text;
     final style = textNode.style;
     var res = const TextStyle();
     final color = textNode.style.attributes[Attribute.color.key];
+
+    if (style.containsKey(Attribute.mention.key)){
+      final mention = style.attributes[Attribute.mention.key]!;
+      final username = mention.value['value'];
+      return MentionWidgetSpan(
+        child: Text('@$username', style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold
+        ))
+      );
+    }
 
     <String, TextStyle?>{
       Attribute.bold.key: defaultStyles.bold,
@@ -906,5 +917,14 @@ class _TextLineElement extends RenderObjectElement {
     if (newChild != null) {
       _slotToChildren[slot] = newChild;
     }
+  }
+}
+
+
+class MentionWidgetSpan extends WidgetSpan{
+  const MentionWidgetSpan({ required Widget child }) : super(child: child);
+  @override
+  int? codeUnitAtVisitor(int index, Accumulator offset) {
+    return 1;
   }
 }
