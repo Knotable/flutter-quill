@@ -38,9 +38,12 @@ class Attribute<T> {
     Attribute.style.key: Attribute.style,
     Attribute.token.key: Attribute.token,
     Attribute.title.key: Attribute.title,
+    Attribute.mention.key: Attribute.mention,
   });
 
   static final BoldAttribute bold = BoldAttribute();
+
+  static final MentionAttribute mention = MentionAttribute(null);
 
   static final ItalicAttribute italic = ItalicAttribute();
 
@@ -91,6 +94,7 @@ class Attribute<T> {
     Attribute.color.key,
     Attribute.background.key,
     Attribute.placeholder.key,
+    Attribute.mention.key
   };
 
   static final Set<String> blockKeys = LinkedHashSet.of({
@@ -100,6 +104,7 @@ class Attribute<T> {
     Attribute.codeBlock.key,
     Attribute.blockQuote.key,
     Attribute.indent.key,
+    Attribute.title.key,
   });
 
   static final Set<String> blockKeysExceptHeader = LinkedHashSet.of({
@@ -214,6 +219,11 @@ class Attribute<T> {
 
 class BoldAttribute extends Attribute<bool> {
   BoldAttribute() : super('bold', AttributeScope.INLINE, true);
+}
+
+class MentionAttribute extends Attribute<Map<String, dynamic>?> {
+  MentionAttribute(Map<String, dynamic>? val) :
+    super('mention', AttributeScope.INLINE, val);
 }
 
 class ItalicAttribute extends Attribute<bool> {

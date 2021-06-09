@@ -123,7 +123,7 @@ class RenderEmbedProxy extends RenderProxyBox implements RenderContentProxyBox {
 
 class RichTextProxy extends SingleChildRenderObjectWidget {
   const RichTextProxy(
-    Text child,
+    RichText child,
     this.textStyle,
     this.textAlign,
     this.textDirection,
