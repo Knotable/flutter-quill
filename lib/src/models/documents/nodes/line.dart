@@ -211,7 +211,11 @@ class Line extends Container<Leaf?> {
       } else if (!const MapEquality()
           .equals(newStyle.getBlocksExceptHeader(), parentStyle)) {
         _unwrap();
-        _applyBlockStyles(newStyle);
+        parentStyle.forEach((key, value) {
+          if (newStyle!.containsKey(key)) return;
+          newStyle = newStyle!.merge(value);
+        });
+        _applyBlockStyles(newStyle!);
       } // else the same style, no-op.
     } else if (blockStyle.value != null) {
       // Only wrap with a new block if this is not an unset

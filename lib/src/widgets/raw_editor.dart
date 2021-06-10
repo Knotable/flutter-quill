@@ -223,11 +223,12 @@ class RawEditorState extends EditorState
 
   List<Widget> _buildChildren(Document doc, BuildContext context) {
     final result = <Widget>[];
-    final indentLevelCounts = <int, int>{};
+    var indentLevelCounts = <int, int>{};
     for (final node in doc.root.children) {
       if (node is Line) {
         final editableTextLine = _getEditableTextLineFromNode(node, context);
         result.add(editableTextLine);
+        indentLevelCounts = {};
       } else if (node is Block) {
         final attrs = node.style.attributes;
         final editableTextBlock = EditableTextBlock(
@@ -248,6 +249,9 @@ class RawEditorState extends EditorState
           indentLevelCounts,
           _handleCheckboxTap,
         );
+        if (attrs[Attribute.list.key] != Attribute.ol) {
+          indentLevelCounts = {};
+        }
         result.add(editableTextBlock);
       } else {
         throw StateError('Unreachable.');
