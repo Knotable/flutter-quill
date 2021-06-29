@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
+import 'package:flutter_quill/src/widgets/floating-cursor.dart';
 import 'package:tuple/tuple.dart';
 
 import '../models/documents/attribute.dart';
@@ -103,6 +104,7 @@ class RawEditorState extends EditorState
         RawEditorStateTextInputClientMixin,
         RawEditorStateSelectionDelegateMixin {
   final GlobalKey _editorKey = GlobalKey();
+  final GlobalKey _cursorKey = GlobalKey();
 
   // Keyboard
   late KeyboardListener _keyboardListener;
@@ -192,7 +194,16 @@ class RawEditorState extends EditorState
         cursor: SystemMouseCursors.text,
         child: Container(
           constraints: constraints,
-          child: child,
+          child: Stack(
+            children: [
+              child,
+              Positioned(top: 0, left: 0, right: 0, bottom: 0, child:
+                FloatingCursorWidget(key: _cursorKey, cursorColor: Colors.blue)
+              ),
+            ],
+          )
+
+
         ),
       ),
     );
@@ -362,6 +373,76 @@ class RawEditorState extends EditorState
     _focusAttachment = widget.focusNode.attach(context,
         onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
     widget.focusNode.addListener(_handleFocusChanged);
+  }
+
+  Offset? _cursorPosition;
+  Offset? _fingerPosition;
+
+  FloatingCursorRender? _getFloationCursor() =>
+    _cursorKey.currentContext?.findRenderObject() as FloatingCursorRender;
+
+  @override
+  void updateFloatingCursor(RawFloatingCursorPoint point) {
+    final editor = getRenderEditor();
+
+    if (editor == null) {
+      return;
+    }
+
+    final cursor = _getFloationCursor();
+
+    switch(point.state){
+      case FloatingCursorDragState.Start:
+        final selectionPoints =
+          editor.getEndpointsForSelection(editor.selection);
+        _cursorPosition = editor.localToGlobal(selectionPoints.first.point);
+        _fingerPosition = Offset.zero;
+        final lineHeight = editor.preferredLineHeight(editor.selection.base);
+        cursor!.move(
+          offset: _cursorPosition! - Offset(0, lineHeight/2),
+          lineHeight: lineHeight
+        );
+        break;
+
+      case FloatingCursorDragState.Update:
+        final editorOffset = editor.localToGlobal(Offset.zero);
+        final delta = point.offset! - _fingerPosition!;
+        _fingerPosition = point.offset!;
+        final offset = _cursorPosition! + delta;
+        var dx = offset.dx;
+        var dy = offset.dy;
+        if (offset.dy <= editorOffset.dy){
+          dy = editorOffset.dy;
+        }
+        if (offset.dy >= editorOffset.dy + editor.size.height) {
+          dy = editorOffset.dy + editor.size.height;
+        }
+        if (offset.dx <= editorOffset.dx){
+           dx = editorOffset.dx;
+        }
+        if (offset.dx >= editor.size.width) {
+          dx = editorOffset.dx + editor.size.width;
+        }
+
+        _cursorPosition = Offset(dx, dy);
+        final position = editor.getPositionForOffset(_cursorPosition!);
+        if (position.offset != editor.selection.baseOffset){
+          widget.controller.updateSelection(
+            editor.selection.copyWith(
+              baseOffset: position.offset, extentOffset: position.offset),
+            ChangeSource.LOCAL
+          );
+        }
+        cursor!.move(
+          offset: _cursorPosition!,
+          lineHeight: editor.preferredLineHeight(editor.selection.base)
+        );
+        break;
+
+      case FloatingCursorDragState.End:
+        cursor!.stop();
+        break;
+    }
   }
 
   @override
@@ -746,3 +827,4 @@ class _Editor extends MultiChildRenderObjectWidget {
       ..setPadding(padding);
   }
 }
+
