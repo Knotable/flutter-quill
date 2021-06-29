@@ -54,8 +54,8 @@ class FloatingCursorRender extends RenderBox
   void paint(PaintingContext context, Offset offset) {
     if (_canPaint) {
       final paint = Paint()
-        ..color = cursorColor.withOpacity(0.75);
-      final _cursorRect = Rect.fromLTRB(0, -_lineHeight/2, 2, _lineHeight);
+        ..color = cursorColor;
+      final _cursorRect = Rect.fromLTRB(0, -_lineHeight/2, 2, _lineHeight/2);
       final caretRRect = RRect.fromRectAndRadius(
         _cursorRect.shift(_offset),
         const Radius.circular(1)

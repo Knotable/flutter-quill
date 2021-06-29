@@ -197,8 +197,15 @@ class RawEditorState extends EditorState
           child: Stack(
             children: [
               child,
-              Positioned(top: 0, left: 0, right: 0, bottom: 0, child:
-                FloatingCursorWidget(key: _cursorKey, cursorColor: Colors.blue)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: FloatingCursorWidget(
+                  key: _cursorKey,
+                  cursorColor: widget.cursorStyle.color.withOpacity(0.7)
+                )
               ),
             ],
           )
@@ -397,10 +404,9 @@ class RawEditorState extends EditorState
           editor.getEndpointsForSelection(editor.selection);
         _cursorPosition = editor.localToGlobal(selectionPoints.first.point);
         _fingerPosition = Offset.zero;
-        final lineHeight = editor.preferredLineHeight(editor.selection.base);
         cursor!.move(
-          offset: _cursorPosition! - Offset(0, lineHeight/2),
-          lineHeight: lineHeight
+          offset: _cursorPosition!,
+          lineHeight: editor.preferredLineHeight(editor.selection.base)
         );
         break;
 
