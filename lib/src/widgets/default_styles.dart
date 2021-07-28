@@ -45,7 +45,6 @@ class DefaultTextBlockStyle {
 
 class DefaultStyles {
   DefaultStyles({
-    this.title,
     this.h1,
     this.h2,
     this.h3,
@@ -68,7 +67,6 @@ class DefaultStyles {
     this.sizeHuge,
   });
 
-  final DefaultTextBlockStyle? title;
   final DefaultTextBlockStyle? h1;
   final DefaultTextBlockStyle? h2;
   final DefaultTextBlockStyle? h3;
@@ -115,14 +113,6 @@ class DefaultStyles {
     }
 
     return DefaultStyles(
-        title: DefaultTextBlockStyle(
-            defaultTextStyle.style.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-            const Tuple2(0, 0),
-            const Tuple2(0, 0),
-            null),
         h1: DefaultTextBlockStyle(
             defaultTextStyle.style.copyWith(
               fontSize: 34,
@@ -209,7 +199,6 @@ class DefaultStyles {
 
   DefaultStyles merge(DefaultStyles other) {
     return DefaultStyles(
-        title: other.title ?? title,
         h1: other.h1 ?? h1,
         h2: other.h2 ?? h2,
         h3: other.h3 ?? h3,
