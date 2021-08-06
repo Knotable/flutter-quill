@@ -38,7 +38,10 @@ class Attribute<T> {
     Attribute.style.key: Attribute.style,
     Attribute.token.key: Attribute.token,
     Attribute.mention.key: Attribute.mention,
+    Attribute.title.key: Attribute.title
   });
+
+  static final TitleAttribute title = TitleAttribute('');
 
   static final BoldAttribute bold = BoldAttribute();
 
@@ -211,6 +214,10 @@ class Attribute<T> {
   String toString() {
     return 'Attribute{key: $key, scope: $scope, value: $value}';
   }
+}
+
+class TitleAttribute extends Attribute<String> {
+  TitleAttribute(String val) : super('title', AttributeScope.BLOCK, val);
 }
 
 class BoldAttribute extends Attribute<bool> {

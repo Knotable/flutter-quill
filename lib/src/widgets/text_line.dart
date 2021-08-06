@@ -95,10 +95,31 @@ class TextLine extends StatelessWidget {
 
     var textStyle = const TextStyle();
 
+    if (line.style.containsKey(Attribute.title.key)){
+      textStyle = defaultStyles.title!.style;
+      final titleAttr = line.style.attributes[Attribute.title.key];
+      final placeholder = titleAttr!.value ?? '';
+      if (children.isEmpty && placeholder.isNotEmpty){
+        return TextSpan(
+          children: [
+            WidgetSpan(
+              child: Text(placeholder,
+                style: textStyle.merge(const TextStyle(color: Colors.grey))
+              )
+            )
+          ],
+          style: textStyle
+        );
+      }
+      return TextSpan(children: children, style: textStyle);
+    }
+
+
     if (line.style.containsKey(Attribute.placeholder.key)) {
       textStyle = defaultStyles.placeHolder!.style;
       return TextSpan(children: children, style: textStyle);
     }
+
 
     final header = line.style.attributes[Attribute.header.key];
     final m = <Attribute, TextStyle>{
