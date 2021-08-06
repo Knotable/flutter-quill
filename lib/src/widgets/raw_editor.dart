@@ -9,7 +9,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
-import 'package:flutter_quill/src/widgets/floating-cursor.dart';
 import 'package:tuple/tuple.dart';
 
 import '../models/documents/attribute.dart';
@@ -21,6 +20,7 @@ import 'cursor.dart';
 import 'default_styles.dart';
 import 'delegate.dart';
 import 'editor.dart';
+import 'floating-cursor.dart';
 import 'keyboard_listener.dart';
 import 'proxy.dart';
 import 'raw_editor/raw_editor_state_keyboard_mixin.dart';
@@ -142,9 +142,7 @@ class RawEditorState extends EditorState
     super.build(context);
 
     var _doc = widget.controller.document;
-    if (_doc.isEmpty() &&
-        !widget.focusNode.hasFocus &&
-        widget.placeholder != null) {
+    if (_doc.isEmpty() && widget.placeholder != null) {
       _doc = Document.fromJson(jsonDecode(
           '[{"attributes":{"placeholder":true},"insert":"${widget.placeholder}\\n"}]'));
     }
@@ -250,26 +248,23 @@ class RawEditorState extends EditorState
       } else if (node is Block) {
         final attrs = node.style.attributes;
         final editableTextBlock = EditableTextBlock(
-          node,
-          _textDirection,
-          widget.scrollBottomInset,
-          _getVerticalSpacingForBlock(node, _styles),
-          widget.controller.selection,
-          widget.selectionColor,
-          _styles,
-          widget.enableInteractiveSelection,
-          _hasFocus,
-          attrs.containsKey(Attribute.codeBlock.key)
-              ? const EdgeInsets.all(16)
-              : null,
-          widget.embedBuilder,
-          _cursorCont,
-          indentLevelCounts,
-          _handleCheckboxTap,
-        );
-        if (attrs[Attribute.list.key] != Attribute.ol) {
-          indentLevelCounts = {};
-        }
+            node,
+            _textDirection,
+            widget.scrollBottomInset,
+            _getVerticalSpacingForBlock(node, _styles),
+            widget.controller.selection,
+            widget.selectionColor,
+            _styles,
+            widget.enableInteractiveSelection,
+            _hasFocus,
+            attrs.containsKey(Attribute.codeBlock.key)
+                ? const EdgeInsets.all(16)
+                : null,
+            widget.embedBuilder,
+            _cursorCont,
+            indentLevelCounts,
+            _handleCheckboxTap,
+            widget.readOnly);
         result.add(editableTextBlock);
       } else {
         throw StateError('Unreachable.');
@@ -285,6 +280,7 @@ class RawEditorState extends EditorState
       textDirection: _textDirection,
       embedBuilder: widget.embedBuilder,
       styles: _styles!,
+      readOnly: widget.readOnly,
     );
     final editableTextLine = EditableTextLine(
         node,
@@ -705,12 +701,13 @@ class RawEditorState extends EditorState
     if (value.text == textEditingValue.text) {
       widget.controller.updateSelection(value.selection, ChangeSource.LOCAL);
     } else {
-      __setEditingValue(value);
+      _setEditingValue(value);
     }
   }
 
-  Future<void> __setEditingValue(TextEditingValue value) async {
-    if (await __isItCut(value)) {
+  // set editing value from clipboard for mobile
+  Future<void> _setEditingValue(TextEditingValue value) async {
+    if (await _isItCut(value)) {
       widget.controller.replaceText(
         textEditingValue.selection.start,
         textEditingValue.text.length - value.text.length,
@@ -738,7 +735,7 @@ class RawEditorState extends EditorState
     }
   }
 
-  Future<bool> __isItCut(TextEditingValue value) async {
+  Future<bool> _isItCut(TextEditingValue value) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data == null) {
       return false;
@@ -767,12 +764,6 @@ class RawEditorState extends EditorState
 
   @override
   bool get wantKeepAlive => widget.focusNode.hasFocus;
-
-  @override
-  void userUpdateTextEditingValue(
-      TextEditingValue value, SelectionChangedCause cause) {
-    updateEditingValue(value);
-  }
 }
 
 class _Editor extends MultiChildRenderObjectWidget {

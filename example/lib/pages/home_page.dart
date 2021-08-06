@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:filesystem_picker/filesystem_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -138,6 +140,29 @@ class _HomePageState extends State<HomePage> {
           ),
           embedBuilder: defaultEmbedBuilderWeb);
     }
+    var toolbar = QuillToolbar.basic(
+      controller: _controller!,
+      // provide a callback to enable picking images from device.
+      // if omit, "image" button only allows adding images from url.
+      // same goes for videos.
+      onImagePickCallback: _onImagePickCallback,
+      onVideoPickCallback: _onVideoPickCallback,
+      // uncomment to provide a custom "pick from" dialog.
+      // mediaPickSettingSelector: _selectMediaPickSetting,
+    );
+    if (kIsWeb) {
+      toolbar = QuillToolbar.basic(
+          controller: _controller!,
+          onImagePickCallback: _onImagePickCallback,
+          webImagePickImpl: _webImagePickImpl);
+    }
+    if (_isDesktop()) {
+      toolbar = QuillToolbar.basic(
+          controller: _controller!,
+          onImagePickCallback: _onImagePickCallback,
+          filePickImpl: openFileSystemPickerForDesktop);
+    }
+
     return SafeArea(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -155,17 +180,22 @@ class _HomePageState extends State<HomePage> {
                   child: Container(
                   padding:
                       const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                  child: QuillToolbar.basic(
-                      controller: _controller!,
-                      onImagePickCallback: _onImagePickCallback),
+                  child: toolbar,
                 ))
-              : Container(
-                  child: QuillToolbar.basic(
-                      controller: _controller!,
-                      onImagePickCallback: _onImagePickCallback),
-                ),
+              : Container(child: toolbar)
         ],
       ),
+    );
+  }
+
+  bool _isDesktop() => !kIsWeb && !Platform.isAndroid && !Platform.isIOS;
+
+  Future<String?> openFileSystemPickerForDesktop(BuildContext context) async {
+    return await FilesystemPicker.open(
+      context: context,
+      rootDirectory: await getApplicationDocumentsDirectory(),
+      fsType: FilesystemType.file,
+      fileTileSelectMode: FileTileSelectMode.wholeTile,
     );
   }
 
@@ -179,6 +209,54 @@ class _HomePageState extends State<HomePage> {
         await file.copy('${appDocDir.path}/${basename(file.path)}');
     return copiedFile.path.toString();
   }
+
+  Future<String?> _webImagePickImpl(
+      OnImagePickCallback onImagePickCallback) async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null) {
+      return null;
+    }
+
+    // Take first, because we don't allow picking multiple files.
+    final fileName = result.files.first.name;
+    final file = File(fileName);
+
+    return onImagePickCallback(file);
+  }
+
+  // Renders the video picked by imagePicker from local file storage
+  // You can also upload the picked video to any server (eg : AWS s3
+  // or Firebase) and then return the uploaded video URL.
+  Future<String> _onVideoPickCallback(File file) async {
+    // Copies the picked file from temporary cache to applications directory
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final copiedFile =
+        await file.copy('${appDocDir.path}/${basename(file.path)}');
+    return copiedFile.path.toString();
+  }
+
+  Future<MediaPickSetting?> _selectMediaPickSetting(BuildContext context) =>
+      showDialog<MediaPickSetting>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          contentPadding: EdgeInsets.zero,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.collections),
+                label: const Text('Gallery'),
+                onPressed: () => Navigator.pop(ctx, MediaPickSetting.Gallery),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.link),
+                label: const Text('Link'),
+                onPressed: () => Navigator.pop(ctx, MediaPickSetting.Link),
+              )
+            ],
+          ),
+        ),
+      );
 
   Widget _buildMenuBar(BuildContext context) {
     final size = MediaQuery.of(context).size;

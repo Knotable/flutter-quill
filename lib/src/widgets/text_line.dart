@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:tuple/tuple.dart';
-
 import '../models/documents/attribute.dart';
 import '../models/documents/nodes/container.dart' as container;
 import '../models/documents/nodes/leaf.dart' as leaf;
@@ -23,6 +22,7 @@ class TextLine extends StatelessWidget {
     required this.line,
     required this.embedBuilder,
     required this.styles,
+    required this.readOnly,
     this.textDirection,
     Key? key,
   }) : super(key: key);
@@ -31,14 +31,24 @@ class TextLine extends StatelessWidget {
   final TextDirection? textDirection;
   final EmbedBuilder embedBuilder;
   final DefaultStyles styles;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
     assert(debugCheckHasMediaQuery(context));
 
     if (line.hasEmbed) {
-      final embed = line.children.single as leaf.Embed;
-      return EmbedProxy(embedBuilder(context, embed));
+      if (line.childCount == 1) {
+        // For video, it is always single child
+        final embed = line.children.single as leaf.Embed;
+        return EmbedProxy(embedBuilder(context, embed, readOnly));
+      }
+
+      // The line could contain more than one Embed & more than one Text
+      // TODO: handle more than one Embed
+      final embed =
+        line.children.firstWhere((child) => child is leaf.Embed) as leaf.Embed;
+      return EmbedProxy(embedBuilder(context, embed, readOnly));
     }
 
     final textSpan = _buildTextSpan(context);
@@ -638,7 +648,8 @@ class RenderEditableTextLine extends RenderEditableBox {
         : _leading!.getMinIntrinsicWidth(height - verticalPadding).ceil();
     final bodyWidth = _body == null
         ? 0
-        : _body!.getMinIntrinsicWidth(math.max(0, height - verticalPadding))
+        : _body!
+            .getMinIntrinsicWidth(math.max(0, height - verticalPadding))
             .ceil();
     return horizontalPadding + leadingWidth + bodyWidth;
   }
@@ -653,7 +664,8 @@ class RenderEditableTextLine extends RenderEditableBox {
         : _leading!.getMaxIntrinsicWidth(height - verticalPadding).ceil();
     final bodyWidth = _body == null
         ? 0
-        : _body!.getMaxIntrinsicWidth(math.max(0, height - verticalPadding))
+        : _body!
+            .getMaxIntrinsicWidth(math.max(0, height - verticalPadding))
             .ceil();
     return horizontalPadding + leadingWidth + bodyWidth;
   }

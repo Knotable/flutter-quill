@@ -1,3 +1,60 @@
+## [1.8.3]
+* Updated quill_delta.
+
+## [1.8.2]
+* Support mobile image alignment.
+
+## [1.8.1]
+* Support mobile custom size image.
+
+## [1.8.0]
+* Support entering link for image/video.
+
+## [1.7.3]
+* Bumps photo_view version.
+
+## [1.7.2]
+* Fix static analysis error.
+
+## [1.7.1]
+* Support Youtube video.
+
+## [1.7.0]
+* Support video.
+
+## [1.6.4]
+* Bug fix for clear format button.
+
+## [1.6.3]
+* Fixed dragging right handle scrolling issue.
+
+## [1.6.2]
+* Fixed the position of the selection status drag handle.
+
+## [1.6.1]
+* Upgrade image_picker and flutter_colorpicker.
+
+## [1.6.0]
+* Support Multi Row Toolbar.
+
+## [1.5.0]
+* Remove file_picker dependency.
+
+## [1.4.1]
+* Remove filesystem_picker dependency.
+
+## [1.4.0]
+* Remove path_provider dependency.
+
+## [1.3.4]
+* Add option to paintCursorAboveText.
+
+## [1.3.3]
+* Upgrade file_picker version.
+
+## [1.3.2]
+* Fix copy/paste bug.
+
 ## [1.3.1]
 * New logo.
 
