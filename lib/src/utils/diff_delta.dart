@@ -66,38 +66,38 @@ Diff getDiff(String oldText, String newText, int cursorPosition) {
   return Diff(start, deleted, inserted);
 }
 
-// int getPositionDelta(Delta user, Delta actual) {
-//   if (actual.isEmpty) {
-//     return 0;
-//   }
+int getPositionDelta(Delta user, Delta actual) {
+  if (actual.isEmpty) {
+    return 0;
+  }
 
-//   final userItr = DeltaIterator(user);
-//   final actualItr = DeltaIterator(actual);
-//   var diff = 0;
-//   while (userItr.hasNext || actualItr.hasNext) {
-//     final length = math.min(userItr.peekLength(), actualItr.peekLength());
-//     final userOperation = userItr.next(length);
-//     final actualOperation = actualItr.next(length);
-//     if (userOperation.length != actualOperation.length) {
-//       throw 'userOp ${userOperation.length} does not match actualOp '
-//           '${actualOperation.length}';
-//     }
-//     if (userOperation.key == actualOperation.key) {
-//       continue;
-//     } else if (userOperation.isInsert && actualOperation.isRetain) {
-//       diff -= userOperation.length!;
-//     } else if (userOperation.isDelete && actualOperation.isRetain) {
-//       diff += userOperation.length!;
-//     } else if (userOperation.isRetain && actualOperation.isInsert) {
-//       String? operationTxt = '';
-//       if (actualOperation.data is String) {
-//         operationTxt = actualOperation.data as String?;
-//       }
-//       if (operationTxt!.startsWith('\n')) {
-//         continue;
-//       }
-//       diff += actualOperation.length!;
-//     }
-//   }
-//   return diff;
-// }
+  final userItr = DeltaIterator(user);
+  final actualItr = DeltaIterator(actual);
+  var diff = 0;
+  while (userItr.hasNext || actualItr.hasNext) {
+    final length = math.min(userItr.peekLength(), actualItr.peekLength());
+    final userOperation = userItr.next(length);
+    final actualOperation = actualItr.next(length);
+    if (userOperation.length != actualOperation.length) {
+      throw 'userOp ${userOperation.length} does not match actualOp '
+          '${actualOperation.length}';
+    }
+    if (userOperation.key == actualOperation.key) {
+      continue;
+    } else if (userOperation.isInsert && actualOperation.isRetain) {
+      diff -= userOperation.length!;
+    } else if (userOperation.isDelete && actualOperation.isRetain) {
+      diff += userOperation.length!;
+    } else if (userOperation.isRetain && actualOperation.isInsert) {
+      String? operationTxt = '';
+      if (actualOperation.data is String) {
+        operationTxt = actualOperation.data as String?;
+      }
+      if (operationTxt!.startsWith('\n')) {
+        continue;
+      }
+      diff += actualOperation.length!;
+    }
+  }
+  return diff;
+}
