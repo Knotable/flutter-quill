@@ -141,11 +141,7 @@ class QuillController extends ChangeNotifier {
       if (delta == null || delta.isEmpty) {
         _updateSelection(textSelection, ChangeSource.LOCAL);
       } else {
-        final user = Delta()
-          ..retain(index)
-          ..insert(data)
-          ..delete(len);
-        final positionDelta = getPositionDelta(user, delta);
+        final positionDelta = DeltaIterator(delta).peekLength();
         _updateSelection(
           textSelection.copyWith(
             baseOffset: textSelection.baseOffset + positionDelta,
