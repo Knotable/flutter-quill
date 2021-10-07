@@ -141,15 +141,35 @@ class QuillController extends ChangeNotifier {
       if (delta == null || delta.isEmpty) {
         _updateSelection(textSelection, ChangeSource.LOCAL);
       } else {
-        // final user = Delta()..retain(index)..insert(data)..delete(len);
-        final positionDelta = 0; //getPositionDelta(user, delta);
+        final iter = DeltaIterator(delta);
+        var offset = _selection.extentOffset - _selection.baseOffset;
+
+        do {
+          final op = iter.next();
+          if (op.isInsert) {
+            offset += op.data is String ? (op.data as String).length : 1;
+          }
+          if (op.isDelete) {
+            offset -= op.length!;
+          }
+        } while (iter.hasNext);
+
         _updateSelection(
-          textSelection.copyWith(
-            baseOffset: textSelection.baseOffset + positionDelta,
-            extentOffset: textSelection.extentOffset + positionDelta,
-          ),
-          ChangeSource.LOCAL,
-        );
+            TextSelection.collapsed(offset: _selection.baseOffset + offset),
+            ChangeSource.LOCAL);
+
+        // final user = Delta()
+        //   ..retain(index)
+        //   ..insert(data)
+        //   ..delete(len);
+        // final positionDelta = getPositionDelta(user, delta);
+        // _updateSelection(
+        //   textSelection.copyWith(
+        //     baseOffset: textSelection.baseOffset + positionDelta,
+        //     extentOffset: textSelection.extentOffset + positionDelta,
+        //   ),
+        //   ChangeSource.LOCAL,
+        // );
       }
     }
 
