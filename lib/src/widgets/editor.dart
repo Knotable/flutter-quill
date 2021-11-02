@@ -47,6 +47,8 @@ const linkPrefixes = [
 ];
 
 abstract class EditorState extends State<RawEditor> {
+  ScrollController get scrollController;
+
   TextEditingValue getTextEditingValue();
 
   void setTextEditingValue(TextEditingValue value);
@@ -62,32 +64,75 @@ abstract class EditorState extends State<RawEditor> {
   void requestKeyboard();
 }
 
+/// Base interface for editable render objects.
 abstract class RenderAbstractEditor {
   TextSelection selectWordAtPosition(TextPosition position);
 
   TextSelection selectLineAtPosition(TextPosition position);
 
+  /// Returns preferred line height at specified `position` in text.
   double preferredLineHeight(TextPosition position);
 
+  /// Returns [Rect] for caret in local coordinates
+  ///
+  /// Useful to enforce visibility of full caret at given position
+  Rect getLocalRectForCaret(TextPosition position);
+
+  /// Returns the local coordinates of the endpoints of the given selection.
+  ///
+  /// If the selection is collapsed (and therefore occupies a single point), the
+  /// returned list is of length one. Otherwise, the selection is not collapsed
+  /// and the returned list is of length two. In this case, however, the two
+  /// points might actually be co-located (e.g., because of a bidirectional
+  /// selection that contains some text but whose ends meet in the middle).
   TextPosition getPositionForOffset(Offset offset);
 
   List<TextSelectionPoint> getEndpointsForSelection(
       TextSelection textSelection);
 
+  /// If [ignorePointer] is false (the default) then this method is called by
+  /// the internal gesture recognizer's [TapGestureRecognizer.onTapDown]
+  /// callback.
+  ///
+  /// When [ignorePointer] is true, an ancestor widget must respond to tap
+  /// down events by calling this method.
   void handleTapDown(TapDownDetails details);
 
+  /// Selects the set words of a paragraph in a given range of global positions.
+  ///
+  /// The first and last endpoints of the selection will always be at the
+  /// beginning and end of a word respectively.
+  ///
+  /// {@macro flutter.rendering.editable.select}
   void selectWordsInRange(
     Offset from,
     Offset to,
     SelectionChangedCause cause,
   );
 
+  /// Move the selection to the beginning or end of a word.
+  ///
+  /// {@macro flutter.rendering.editable.select}
   void selectWordEdge(SelectionChangedCause cause);
 
+  /// Select text between the global positions [from] and [to].
   void selectPositionAt(Offset from, Offset to, SelectionChangedCause cause);
 
+  /// Select a word around the location of the last tap down.
+  ///
+  /// {@macro flutter.rendering.editable.select}
   void selectWord(SelectionChangedCause cause);
 
+  /// Move selection to the location of the last tap down.
+  ///
+  /// {@template flutter.rendering.editable.select}
+  /// This method is mainly used to translate user inputs in global positions
+  /// into a [TextSelection]. When used in conjunction with a [EditableText],
+  /// the selection change is fed back into [TextEditingController.selection].
+  ///
+  /// If you have a [TextEditingController], it's generally easier to
+  /// programmatically manipulate its `value` or `selection` directly.
+  /// {@endtemplate}
   void selectPosition(SelectionChangedCause cause);
 }
 
@@ -206,21 +251,26 @@ class QuillEditor extends StatefulWidget {
       this.onSingleLongTapStart,
       this.onSingleLongTapMoveUpdate,
       this.onSingleLongTapEnd,
-      this.embedBuilder = _defaultEmbedBuilder});
+      this.embedBuilder = _defaultEmbedBuilder,
+      this.customStyleBuilder,
+      Key? key});
 
   factory QuillEditor.basic({
     required QuillController controller,
     required bool readOnly,
+    Brightness? keyboardAppearance,
   }) {
     return QuillEditor(
-        controller: controller,
-        scrollController: ScrollController(),
-        scrollable: true,
-        focusNode: FocusNode(),
-        autoFocus: true,
-        readOnly: readOnly,
-        expands: false,
-        padding: EdgeInsets.zero);
+      controller: controller,
+      scrollController: ScrollController(),
+      scrollable: true,
+      focusNode: FocusNode(),
+      autoFocus: true,
+      readOnly: readOnly,
+      expands: false,
+      padding: EdgeInsets.zero,
+      keyboardAppearance: keyboardAppearance ?? Brightness.light,
+    );
   }
 
   final QuillController controller;
@@ -265,6 +315,7 @@ class QuillEditor extends StatefulWidget {
       onSingleLongTapEnd;
 
   final EmbedBuilder embedBuilder;
+  final CustomStyleBuilder? customStyleBuilder;
 
   @override
   _QuillEditorState createState() => _QuillEditorState();
@@ -329,46 +380,48 @@ class _QuillEditorState extends State<QuillEditor>
     return _selectionGestureDetectorBuilder.build(
       HitTestBehavior.translucent,
       RawEditor(
-          _editorKey,
-          widget.controller,
-          widget.focusNode,
-          widget.scrollController,
-          widget.scrollable,
-          widget.scrollBottomInset,
-          widget.padding,
-          widget.readOnly,
-          widget.placeholder,
-          widget.onLaunchUrl,
-          ToolbarOptions(
-            copy: widget.enableInteractiveSelection,
-            cut: widget.enableInteractiveSelection,
-            paste: widget.enableInteractiveSelection,
-            selectAll: widget.enableInteractiveSelection,
-          ),
-          theme.platform == TargetPlatform.iOS ||
-              theme.platform == TargetPlatform.android,
-          widget.showCursor,
-          CursorStyle(
-            color: cursorColor,
-            backgroundColor: Colors.grey,
-            width: 2,
-            radius: cursorRadius,
-            offset: cursorOffset,
-            paintAboveText: widget.paintCursorAboveText ?? paintCursorAboveText,
-            opacityAnimates: cursorOpacityAnimates,
-          ),
-          widget.textCapitalization,
-          widget.maxHeight,
-          widget.minHeight,
-          widget.customStyles,
-          widget.expands,
-          widget.autoFocus,
-          selectionColor,
-          textSelectionControls,
-          widget.keyboardAppearance,
-          widget.enableInteractiveSelection,
-          widget.scrollPhysics,
-          widget.embedBuilder),
+        _editorKey,
+        widget.controller,
+        widget.focusNode,
+        widget.scrollController,
+        widget.scrollable,
+        widget.scrollBottomInset,
+        widget.padding,
+        widget.readOnly,
+        widget.placeholder,
+        widget.onLaunchUrl,
+        ToolbarOptions(
+          copy: widget.enableInteractiveSelection,
+          cut: widget.enableInteractiveSelection,
+          paste: widget.enableInteractiveSelection,
+          selectAll: widget.enableInteractiveSelection,
+        ),
+        theme.platform == TargetPlatform.iOS ||
+            theme.platform == TargetPlatform.android,
+        widget.showCursor,
+        CursorStyle(
+          color: cursorColor,
+          backgroundColor: Colors.grey,
+          width: 2,
+          radius: cursorRadius,
+          offset: cursorOffset,
+          paintAboveText: widget.paintCursorAboveText ?? paintCursorAboveText,
+          opacityAnimates: cursorOpacityAnimates,
+        ),
+        widget.textCapitalization,
+        widget.maxHeight,
+        widget.minHeight,
+        widget.customStyles,
+        widget.expands,
+        widget.autoFocus,
+        selectionColor,
+        textSelectionControls,
+        widget.keyboardAppearance,
+        widget.enableInteractiveSelection,
+        widget.scrollPhysics,
+        widget.embedBuilder,
+        widget.customStyleBuilder,
+      ),
     );
   }
 
@@ -622,6 +675,7 @@ typedef TextSelectionChangedHandler = void Function(
 class RenderEditor extends RenderEditableContainerBox
     implements RenderAbstractEditor {
   RenderEditor(
+    ViewportOffset? offset,
     List<RenderEditableBox>? children,
     TextDirection textDirection,
     double scrollBottomInset,
@@ -656,6 +710,41 @@ class RenderEditor extends RenderEditableContainerBox
   ValueListenable<bool> get selectionEndInViewport => _selectionEndInViewport;
   final ValueNotifier<bool> _selectionEndInViewport = ValueNotifier<bool>(true);
 
+  void _updateSelectionExtentsVisibility(Offset effectiveOffset) {
+    final visibleRegion = Offset.zero & size;
+    final startPosition =
+        TextPosition(offset: selection.start, affinity: selection.affinity);
+    final startOffset = _getOffsetForCaret(startPosition);
+    // TODO(justinmc): https://github.com/flutter/flutter/issues/31495
+    // Check if the selection is visible with an approximation because a
+    // difference between rounded and unrounded values causes the caret to be
+    // reported as having a slightly (< 0.5) negative y offset. This rounding
+    // happens in paragraph.cc's layout and TextPainer's
+    // _applyFloatingPointHack. Ideally, the rounding mismatch will be fixed and
+    // this can be changed to be a strict check instead of an approximation.
+    const visibleRegionSlop = 0.5;
+    _selectionStartInViewport.value = visibleRegion
+        .inflate(visibleRegionSlop)
+        .contains(startOffset + effectiveOffset);
+
+    final endPosition =
+        TextPosition(offset: selection.end, affinity: selection.affinity);
+    final endOffset = _getOffsetForCaret(endPosition);
+    _selectionEndInViewport.value = visibleRegion
+        .inflate(visibleRegionSlop)
+        .contains(endOffset + effectiveOffset);
+  }
+
+  // returns offset relative to this at which the caret will be painted
+  // given a global TextPosition
+  Offset _getOffsetForCaret(TextPosition position) {
+    final child = childAtPosition(position);
+    final childPosition = child.globalToLocalPosition(position);
+    final boxParentData = child.parentData as BoxParentData;
+    final localOffsetForCaret = child.getOffsetForCaret(childPosition);
+    return boxParentData.offset + localOffsetForCaret;
+  }
+
   void setDocument(Document doc) {
     if (document == doc) {
       return;
@@ -670,6 +759,19 @@ class RenderEditor extends RenderEditableContainerBox
     }
     _hasFocus = h;
     markNeedsSemanticsUpdate();
+  }
+
+  Offset get _paintOffset => Offset(0, -(offset?.pixels ?? 0.0));
+
+  ViewportOffset? get offset => _offset;
+  ViewportOffset? _offset;
+
+  set offset(ViewportOffset? value) {
+    if (_offset == value) return;
+    if (attached) _offset?.removeListener(markNeedsPaint);
+    _offset = value;
+    if (attached) _offset?.addListener(markNeedsPaint);
+    markNeedsLayout();
   }
 
   void setSelection(TextSelection t) {
@@ -905,6 +1007,7 @@ class RenderEditor extends RenderEditableContainerBox
   @override
   void paint(PaintingContext context, Offset offset) {
     defaultPaint(context, offset);
+    _updateSelectionExtentsVisibility(offset + _paintOffset);
     _paintHandleLayers(context, getEndpointsForSelection(selection));
   }
 
@@ -988,7 +1091,8 @@ class RenderEditor extends RenderEditableContainerBox
 
     final caretTop = endpoint.point.dy -
         child.preferredLineHeight(TextPosition(
-            offset: selection.extentOffset - child.getContainer().offset)) -
+            offset:
+                selection.extentOffset - child.getContainer().documentOffset)) -
         kMargin +
         offsetInViewport +
         scrollBottomInset;
@@ -1004,6 +1108,17 @@ class RenderEditor extends RenderEditableContainerBox
       return null;
     }
     return math.max(dy, 0);
+  }
+
+  @override
+  Rect getLocalRectForCaret(TextPosition position) {
+    final targetChild = childAtPosition(position);
+    final localPosition = targetChild.globalToLocalPosition(position);
+
+    final childLocalRect = targetChild.getLocalRectForCaret(localPosition);
+
+    final boxParentData = targetChild.parentData as BoxParentData;
+    return childLocalRect.shift(Offset(0, boxParentData.offset.dy));
   }
 }
 
