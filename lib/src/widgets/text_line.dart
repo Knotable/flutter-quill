@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -24,6 +25,7 @@ class TextLine extends StatelessWidget {
     required this.styles,
     required this.readOnly,
     this.textDirection,
+    this.customStyleBuilder,
     Key? key,
   }) : super(key: key);
 
@@ -32,26 +34,17 @@ class TextLine extends StatelessWidget {
   final EmbedBuilder embedBuilder;
   final DefaultStyles styles;
   final bool readOnly;
+  final CustomStyleBuilder? customStyleBuilder;
 
   @override
   Widget build(BuildContext context) {
     assert(debugCheckHasMediaQuery(context));
-
-    if (line.hasEmbed) {
-      if (line.childCount == 1) {
-        // For video, it is always single child
-        final embed = line.children.single as leaf.Embed;
-        return EmbedProxy(embedBuilder(context, embed, readOnly));
-      }
-
-      // The line could contain more than one Embed & more than one Text
-      // TODO: handle more than one Embed
-      final embed =
-        line.children.firstWhere((child) => child is leaf.Embed) as leaf.Embed;
+    if (line.hasEmbed && line.childCount == 1) {
+      // For video, it is always single child
+      final embed = line.children.single as leaf.Embed;
       return EmbedProxy(embedBuilder(context, embed, readOnly));
     }
-
-    final textSpan = _buildTextSpan(context);
+    final textSpan = _getTextSpanForWholeLine(context);
     final strutStyle = StrutStyle.fromTextStyle(textSpan.style!);
     final textAlign = _getTextAlign();
     final child = RichText(
@@ -73,31 +66,67 @@ class TextLine extends StatelessWidget {
         null);
   }
 
+  InlineSpan _getTextSpanForWholeLine(BuildContext context) {
+    final lineStyle = _getLineStyle(styles);
+    if (!line.hasEmbed) {
+      return _buildTextSpan(styles, line.children, lineStyle);
+    }
+
+    // The line could contain more than one Embed & more than one Text
+    final textSpanChildren = <InlineSpan>[];
+    var textNodes = LinkedList<Node>();
+    for (final child in line.children) {
+      if (child is leaf.Embed) {
+        if (textNodes.isNotEmpty) {
+          textSpanChildren.add(_buildTextSpan(styles, textNodes, lineStyle));
+          textNodes = LinkedList<Node>();
+        }
+        // Here it should be image
+        final embed = WidgetSpan(
+            child: EmbedProxy(embedBuilder(context, child, readOnly)));
+        textSpanChildren.add(embed);
+        continue;
+      }
+
+      // here child is Text node and its value is cloned
+      textNodes.add(child.clone());
+    }
+
+    if (textNodes.isNotEmpty) {
+      textSpanChildren.add(_buildTextSpan(styles, textNodes, lineStyle));
+    }
+
+    return TextSpan(style: lineStyle, children: textSpanChildren);
+  }
+
   TextAlign _getTextAlign() {
     final alignment = line.style.attributes[Attribute.align.key];
     if (alignment == Attribute.leftAlignment) {
-      return TextAlign.left;
+      return TextAlign.start;
     } else if (alignment == Attribute.centerAlignment) {
       return TextAlign.center;
     } else if (alignment == Attribute.rightAlignment) {
-      return TextAlign.right;
+      return TextAlign.end;
     } else if (alignment == Attribute.justifyAlignment) {
       return TextAlign.justify;
     }
     return TextAlign.start;
   }
 
-  TextSpan _buildTextSpan(BuildContext context) {
-    final defaultStyles = styles;
-    final children = line.children
+  TextSpan _buildTextSpan(DefaultStyles defaultStyles, LinkedList<Node> nodes,
+      TextStyle lineStyle) {
+    final children = nodes
         .map((node) => _getTextSpanFromNode(defaultStyles, node))
         .toList(growable: false);
 
+    return TextSpan(children: children, style: lineStyle);
+  }
+
+  TextStyle _getLineStyle(DefaultStyles defaultStyles) {
     var textStyle = const TextStyle();
 
     if (line.style.containsKey(Attribute.placeholder.key)) {
-      textStyle = defaultStyles.placeHolder!.style;
-      return TextSpan(children: children, style: textStyle);
+      return defaultStyles.placeHolder!.style;
     }
 
     final header = line.style.attributes[Attribute.header.key];
@@ -109,25 +138,49 @@ class TextLine extends StatelessWidget {
 
     textStyle = textStyle.merge(m[header] ?? defaultStyles.paragraph!.style);
 
-    final block = line.style.getBlockExceptHeader();
+    // Only retrieve exclusive block format for the line style purpose
+    Attribute? block;
+    line.style.getBlocksExceptHeader().forEach((key, value) {
+      if (Attribute.exclusiveBlockKeys.contains(key)) {
+        block = value;
+      }
+    });
+
     TextStyle? toMerge;
     if (block == Attribute.blockQuote) {
       toMerge = defaultStyles.quote!.style;
     } else if (block == Attribute.codeBlock) {
       toMerge = defaultStyles.code!.style;
-    } else if (block != null) {
+    } else if (block == Attribute.list) {
       toMerge = defaultStyles.lists!.style;
     }
 
     textStyle = textStyle.merge(toMerge);
+    textStyle = _applyCustomAttributes(textStyle, line.style.attributes);
 
-    return TextSpan(children: children, style: textStyle);
+    return textStyle;
+  }
+
+  TextStyle _applyCustomAttributes(
+      TextStyle textStyle, Map<String, Attribute> attributes) {
+    if (customStyleBuilder == null) {
+      return textStyle;
+    }
+    attributes.keys.forEach((key) {
+      final attr = attributes[key];
+      if (attr != null) {
+        /// Custom Attribute
+        final customAttr = customStyleBuilder!.call(attr);
+        textStyle = textStyle.merge(customAttr);
+      }
+    });
+    return textStyle;
   }
 
   InlineSpan _getTextSpanFromNode(DefaultStyles defaultStyles, Node node) {
     final textNode = node as leaf.Text;
     final style = textNode.style;
-    var res = const TextStyle();
+    var res = const TextStyle(); // This is inline text style
     final color = textNode.style.attributes[Attribute.color.key];
 
     if (style.containsKey(Attribute.mention.key)){
@@ -144,9 +197,11 @@ class TextLine extends StatelessWidget {
     <String, TextStyle?>{
       Attribute.bold.key: defaultStyles.bold,
       Attribute.italic.key: defaultStyles.italic,
+      Attribute.small.key: defaultStyles.small,
       Attribute.link.key: defaultStyles.link,
       Attribute.underline.key: defaultStyles.underline,
       Attribute.strikeThrough.key: defaultStyles.strikeThrough,
+      Attribute.inlineCode.key: defaultStyles.inlineCode,
     }.forEach((k, s) {
       if (style.values.any((v) => v.key == k)) {
         if (k == Attribute.underline.key || k == Attribute.strikeThrough.key) {
@@ -205,6 +260,7 @@ class TextLine extends StatelessWidget {
       res = res.merge(TextStyle(backgroundColor: backgroundColor));
     }
 
+    res = _applyCustomAttributes(res, textNode.style.attributes);
     return TextSpan(text: textNode.value, style: res);
   }
 
@@ -366,7 +422,7 @@ class RenderEditableTextLine extends RenderEditableBox {
 
     color = c;
     if (containsTextSelection()) {
-      markNeedsPaint();
+      safeMarkNeedsPaint();
     }
   }
 
@@ -378,7 +434,7 @@ class RenderEditableTextLine extends RenderEditableBox {
     final containsSelection = containsTextSelection();
     if (attached && containsCursor()) {
       cursorCont.removeListener(markNeedsLayout);
-      cursorCont.color.removeListener(markNeedsPaint);
+      cursorCont.color.removeListener(safeMarkNeedsPaint);
     }
 
     textSelection = t;
@@ -386,11 +442,11 @@ class RenderEditableTextLine extends RenderEditableBox {
     _containsCursor = null;
     if (attached && containsCursor()) {
       cursorCont.addListener(markNeedsLayout);
-      cursorCont.color.addListener(markNeedsPaint);
+      cursorCont.color.addListener(safeMarkNeedsPaint);
     }
 
     if (containsSelection || containsTextSelection()) {
-      markNeedsPaint();
+      safeMarkNeedsPaint();
     }
   }
 
@@ -532,6 +588,9 @@ class RenderEditableTextLine extends RenderEditableBox {
     return _getPosition(position, 1.5);
   }
 
+  @override
+  bool get isRepaintBoundary => true;
+
   TextPosition? _getPosition(TextPosition textPosition, double dyScale) {
     assert(textPosition.offset < line.length);
     final offset = getOffsetForCaret(textPosition)
@@ -595,7 +654,7 @@ class RenderEditableTextLine extends RenderEditableBox {
     }
     if (containsCursor()) {
       cursorCont.addListener(markNeedsLayout);
-      cursorCont.color.addListener(markNeedsPaint);
+      cursorCont.color.addListener(safeMarkNeedsPaint);
     }
   }
 
@@ -607,7 +666,7 @@ class RenderEditableTextLine extends RenderEditableBox {
     }
     if (containsCursor()) {
       cursorCont.removeListener(markNeedsLayout);
-      cursorCont.color.removeListener(markNeedsPaint);
+      cursorCont.color.removeListener(safeMarkNeedsPaint);
     }
   }
 
@@ -765,21 +824,12 @@ class RenderEditableTextLine extends RenderEditableBox {
     if (_body != null) {
       final parentData = _body!.parentData as BoxParentData;
       final effectiveOffset = offset + parentData.offset;
-      if (enableInteractiveSelection &&
-          line.documentOffset <= textSelection.end &&
-          textSelection.start <= line.documentOffset + line.length - 1) {
-        final local = localSelection(line, textSelection, false);
-        _selectedRects ??= _body!.getBoxesForSelection(
-          local,
-        );
-        _paintSelection(context, effectiveOffset);
-      }
 
       if (hasFocus &&
           cursorCont.show.value &&
           containsCursor() &&
           !cursorCont.style.paintAboveText) {
-        _paintCursor(context, effectiveOffset);
+        _paintCursor(context, effectiveOffset, line.hasEmbed);
       }
 
       context.paintChild(_body!, effectiveOffset);
@@ -788,7 +838,18 @@ class RenderEditableTextLine extends RenderEditableBox {
           cursorCont.show.value &&
           containsCursor() &&
           cursorCont.style.paintAboveText) {
-        _paintCursor(context, effectiveOffset);
+        _paintCursor(context, effectiveOffset, line.hasEmbed);
+      }
+
+      // paint the selection on the top
+      if (enableInteractiveSelection &&
+          line.documentOffset <= textSelection.end &&
+          textSelection.start <= line.documentOffset + line.length - 1) {
+        final local = localSelection(line, textSelection, false);
+        _selectedRects ??= _body!.getBoxesForSelection(
+          local,
+        );
+        _paintSelection(context, effectiveOffset);
       }
     }
   }
@@ -801,17 +862,48 @@ class RenderEditableTextLine extends RenderEditableBox {
     }
   }
 
-  void _paintCursor(PaintingContext context, Offset effectiveOffset) {
+  void _paintCursor(
+      PaintingContext context, Offset effectiveOffset, bool lineHasEmbed) {
     final position = TextPosition(
       offset: textSelection.extentOffset - line.documentOffset,
       affinity: textSelection.base.affinity,
     );
-    _cursorPainter.paint(context.canvas, effectiveOffset, position);
+    _cursorPainter.paint(
+        context.canvas, effectiveOffset, position, lineHasEmbed);
   }
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     return _children.first.hitTest(result, position: position);
+  }
+
+  @override
+  Rect getLocalRectForCaret(TextPosition position) {
+    final caretOffset = getOffsetForCaret(position);
+    var rect =
+        Rect.fromLTWH(0, 0, cursorWidth, cursorHeight).shift(caretOffset);
+    final cursorOffset = cursorCont.style.offset;
+    // Add additional cursor offset (generally only if on iOS).
+    if (cursorOffset != null) rect = rect.shift(cursorOffset);
+    return rect;
+  }
+
+  @override
+  TextPosition globalToLocalPosition(TextPosition position) {
+    assert(getContainer().containsOffset(position.offset),
+        'The provided text position is not in the current node');
+    return TextPosition(
+      offset: position.offset - getContainer().documentOffset,
+      affinity: position.affinity,
+    );
+  }
+
+  void safeMarkNeedsPaint() {
+    if (!attached) {
+      //Should not paint if it was unattached.
+      return;
+    }
+    markNeedsPaint();
   }
 }
 

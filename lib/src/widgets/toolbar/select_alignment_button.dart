@@ -7,8 +7,8 @@ import '../../models/themes/quill_icon_theme.dart';
 import '../controller.dart';
 import '../toolbar.dart';
 
-class SelectHeaderStyleButton extends StatefulWidget {
-  const SelectHeaderStyleButton({
+class SelectAlignmentButton extends StatefulWidget {
+  const SelectAlignmentButton({
     required this.controller,
     this.iconSize = kDefaultIconSize,
     this.iconTheme,
@@ -21,11 +21,10 @@ class SelectHeaderStyleButton extends StatefulWidget {
   final QuillIconTheme? iconTheme;
 
   @override
-  _SelectHeaderStyleButtonState createState() =>
-      _SelectHeaderStyleButtonState();
+  _SelectAlignmentButtonState createState() => _SelectAlignmentButtonState();
 }
 
-class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
+class _SelectAlignmentButtonState extends State<SelectAlignmentButton> {
   Attribute? _value;
 
   Style get _selectionStyle => widget.controller.getSelectionStyle();
@@ -34,8 +33,8 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
   void initState() {
     super.initState();
     setState(() {
-      _value =
-          _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
+      _value = _selectionStyle.attributes[Attribute.align.key] ??
+          Attribute.leftAlignment;
     });
     widget.controller.addListener(_didChangeEditingValue);
   }
@@ -43,25 +42,26 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
   @override
   Widget build(BuildContext context) {
     final _valueToText = <Attribute, String>{
-      Attribute.header: 'N',
-      Attribute.h1: 'H1',
-      Attribute.h2: 'H2',
-      Attribute.h3: 'H3',
+      Attribute.leftAlignment: Attribute.leftAlignment.value!,
+      Attribute.centerAlignment: Attribute.centerAlignment.value!,
+      Attribute.rightAlignment: Attribute.rightAlignment.value!,
+      Attribute.justifyAlignment: Attribute.justifyAlignment.value!,
     };
 
     final _valueAttribute = <Attribute>[
-      Attribute.header,
-      Attribute.h1,
-      Attribute.h2,
-      Attribute.h3
+      Attribute.leftAlignment,
+      Attribute.centerAlignment,
+      Attribute.rightAlignment,
+      Attribute.justifyAlignment
     ];
-    final _valueString = <String>['N', 'H1', 'H2', 'H3'];
+    final _valueString = <String>[
+      Attribute.leftAlignment.value!,
+      Attribute.centerAlignment.value!,
+      Attribute.rightAlignment.value!,
+      Attribute.justifyAlignment.value!,
+    ];
 
     final theme = Theme.of(context);
-    final style = TextStyle(
-      fontWeight: FontWeight.w600,
-      fontSize: widget.iconSize * 0.7,
-    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -85,17 +85,24 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
                       theme.toggleableActiveColor)
                   : (widget.iconTheme?.iconUnselectedFillColor ??
                       theme.canvasColor),
-              onPressed: () =>
-                  widget.controller.formatSelection(_valueAttribute[index]),
-              child: Text(
-                _valueString[index],
-                style: style.copyWith(
-                  color: _valueToText[_value] == _valueString[index]
-                      ? (widget.iconTheme?.iconSelectedColor ??
-                          theme.primaryIconTheme.color)
-                      : (widget.iconTheme?.iconUnselectedColor ??
-                          theme.iconTheme.color),
-                ),
+              onPressed: () => _valueAttribute[index] == Attribute.leftAlignment
+                  ? widget.controller
+                      .formatSelection(Attribute.clone(Attribute.align, null))
+                  : widget.controller.formatSelection(_valueAttribute[index]),
+              child: Icon(
+                _valueString[index] == Attribute.leftAlignment.value
+                    ? Icons.format_align_left
+                    : _valueString[index] == Attribute.centerAlignment.value
+                        ? Icons.format_align_center
+                        : _valueString[index] == Attribute.rightAlignment.value
+                            ? Icons.format_align_right
+                            : Icons.format_align_justify,
+                size: widget.iconSize,
+                color: _valueToText[_value] == _valueString[index]
+                    ? (widget.iconTheme?.iconSelectedColor ??
+                        theme.primaryIconTheme.color)
+                    : (widget.iconTheme?.iconUnselectedColor ??
+                        theme.iconTheme.color),
               ),
             ),
           ),
@@ -106,19 +113,19 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
 
   void _didChangeEditingValue() {
     setState(() {
-      _value =
-          _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
+      _value = _selectionStyle.attributes[Attribute.align.key] ??
+          Attribute.leftAlignment;
     });
   }
 
   @override
-  void didUpdateWidget(covariant SelectHeaderStyleButton oldWidget) {
+  void didUpdateWidget(covariant SelectAlignmentButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_didChangeEditingValue);
       widget.controller.addListener(_didChangeEditingValue);
-      _value =
-          _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
+      _value = _selectionStyle.attributes[Attribute.align.key] ??
+          Attribute.leftAlignment;
     }
   }
 
