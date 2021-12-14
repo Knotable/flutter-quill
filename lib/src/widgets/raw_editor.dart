@@ -22,7 +22,6 @@ import 'default_styles.dart';
 import 'delegate.dart';
 import 'editor.dart';
 import 'floating-cursor.dart';
-import 'keyboard_listener.dart';
 import 'proxy.dart';
 import 'quill_single_child_scroll_view.dart';
 import 'raw_editor/raw_editor_state_selection_delegate_mixin.dart';
