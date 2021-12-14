@@ -40,6 +40,7 @@ class Attribute<T> {
     Attribute.style.key: Attribute.style,
     Attribute.token.key: Attribute.token,
     Attribute.mention.key: Attribute.mention,
+    Attribute.script.key: Attribute.script,
   });
 
   static final BoldAttribute bold = BoldAttribute();
@@ -87,6 +88,8 @@ class Attribute<T> {
   static final StyleAttribute style = StyleAttribute(null);
 
   static final TokenAttribute token = TokenAttribute('');
+
+  static final ScriptAttribute script = ScriptAttribute('');
 
   static final Set<String> inlineKeys = {
     Attribute.bold.key,
@@ -320,4 +323,9 @@ class StyleAttribute extends Attribute<String?> {
 
 class TokenAttribute extends Attribute<String> {
   TokenAttribute(String val) : super('token', AttributeScope.IGNORE, val);
+}
+
+// `script` is supposed to be inline attribute but it is not supported yet
+class ScriptAttribute extends Attribute<String> {
+  ScriptAttribute(String val) : super('script', AttributeScope.IGNORE, val);
 }
