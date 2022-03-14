@@ -174,7 +174,7 @@ class _TextLineState extends State<TextLine> {
           textNodes = LinkedList<Node>();
         }
         // Here it should be image
-        final embed = WidgetSpan(
+        final embed = CustomWidgetSpan(
             child: EmbedProxy(widget.embedBuilder(
                 context, widget.controller, child, widget.readOnly)));
         textSpanChildren.add(embed);
@@ -1267,5 +1267,15 @@ class _TextLineElement extends RenderObjectElement {
     if (newChild != null) {
       _slotToChildren[slot] = newChild;
     }
+  }
+}
+
+
+class CustomWidgetSpan extends WidgetSpan{
+  const CustomWidgetSpan({ required Widget child }) : super(child: child);
+
+  @override
+  int? codeUnitAtVisitor(int index, Accumulator offset) {
+    return 1;
   }
 }

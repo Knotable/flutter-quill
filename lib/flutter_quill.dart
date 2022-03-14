@@ -14,3 +14,7 @@ export 'src/widgets/editor.dart';
 export 'src/widgets/link.dart' show LinkActionPickerDelegate, LinkMenuAction;
 export 'src/widgets/style_widgets/style_widgets.dart';
 export 'src/widgets/toolbar.dart';
+export 'src/models/rules/insert.dart';
+export 'src/models/rules/delete.dart';
+export 'src/models/rules/format.dart';
+export 'src/models/rules/rule.dart';
