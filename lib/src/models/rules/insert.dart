@@ -311,7 +311,6 @@ class AutoFormatMultipleLinksRule extends InsertRule {
   /// This pattern is used to match a links within a text segment.
   ///
   /// It works for the following testing URLs:
-  // www.google.com
   // http://google.com
   // https://www.google.com
   // http://beginner.example.edu/#act
@@ -330,8 +329,7 @@ class AutoFormatMultipleLinksRule extends InsertRule {
   // http://www.example.com/?action=birds&brass=apparatus
   // https://example.net/
   // URL generator tool (https://www.randomlists.com/urls) is used.
-  static const _linkPattern =
-      r'(https?:\/\/|www\.)[\w-\.]+\.[\w-\.]+(\/([\S]+)?)?';
+  static const _linkPattern = r'(https?:\/\/)[\w-\.]+\.[\w-\.]+(\/([\S]+)?)?';
   static final linkRegExp = RegExp(_linkPattern);
 
   @override
