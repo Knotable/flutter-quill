@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+// ignore: unnecessary_import
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +13,8 @@ import 'package:tuple/tuple.dart';
 
 import '../models/documents/document.dart';
 import '../models/documents/nodes/container.dart' as container_node;
+import '../models/documents/nodes/embeddable.dart';
+import '../models/documents/nodes/leaf.dart';
 import '../models/documents/style.dart';
 import '../utils/platform.dart';
 import 'box.dart';
@@ -18,7 +22,7 @@ import 'controller.dart';
 import 'cursor.dart';
 import 'default_styles.dart';
 import 'delegate.dart';
-import 'embeds/default_embed_builder.dart';
+import 'embeds.dart';
 import 'float_cursor.dart';
 import 'link.dart';
 import 'raw_editor.dart';
@@ -153,6 +157,7 @@ class QuillEditor extends StatefulWidget {
       this.paintCursorAboveText,
       this.placeholder,
       this.enableInteractiveSelection = true,
+      this.enableSelectionToolbar = true,
       this.scrollBottomInset = 0,
       this.minHeight,
       this.maxHeight,
@@ -167,12 +172,13 @@ class QuillEditor extends StatefulWidget {
       this.onSingleLongTapStart,
       this.onSingleLongTapMoveUpdate,
       this.onSingleLongTapEnd,
-      this.embedBuilder = defaultEmbedBuilder,
+      this.embedBuilders,
       this.linkActionPickerDelegate = defaultLinkActionPickerDelegate,
       this.customStyleBuilder,
       this.locale,
       this.floatingCursorDisabled = false,
       this.textSelectionControls,
+      this.onImagePaste,
       Key? key})
       : super(key: key);
 
@@ -180,6 +186,11 @@ class QuillEditor extends StatefulWidget {
     required QuillController controller,
     required bool readOnly,
     Brightness? keyboardAppearance,
+    Iterable<EmbedBuilder>? embedBuilders,
+
+    /// The locale to use for the editor toolbar, defaults to system locale
+    /// More at https://github.com/singerdmx/flutter-quill#translation
+    Locale? locale,
   }) {
     return QuillEditor(
       controller: controller,
@@ -191,6 +202,8 @@ class QuillEditor extends StatefulWidget {
       expands: false,
       padding: EdgeInsets.zero,
       keyboardAppearance: keyboardAppearance ?? Brightness.light,
+      locale: locale,
+      embedBuilders: embedBuilders,
     );
   }
 
@@ -254,7 +267,13 @@ class QuillEditor extends StatefulWidget {
   /// When this is false, the text selection cannot be adjusted by
   /// the user, text cannot be copied, and the user cannot paste into
   /// the text field from the clipboard.
+  ///
+  /// To disable just the selection toolbar, set enableSelectionToolbar
+  /// to false.
   final bool enableInteractiveSelection;
+
+  /// Whether to show the cut/copy/paste menu when selecting text.
+  final bool enableSelectionToolbar;
 
   /// The minimum height to be occupied by this editor.
   ///
@@ -339,7 +358,7 @@ class QuillEditor extends StatefulWidget {
           LongPressEndDetails details, TextPosition Function(Offset offset))?
       onSingleLongTapEnd;
 
-  final EmbedBuilder embedBuilder;
+  final Iterable<EmbedBuilder>? embedBuilders;
   final CustomStyleBuilder? customStyleBuilder;
 
   /// The locale to use for the editor toolbar, defaults to system locale
@@ -367,6 +386,11 @@ class QuillEditor extends StatefulWidget {
   /// if this is null a default textSelectionControls based on the app's theme
   /// will be used
   final TextSelectionControls? textSelectionControls;
+
+  /// Callback when the user pastes the given image.
+  ///
+  /// Returns the url of the image if the image should be inserted.
+  final Future<String?> Function(Uint8List imageBytes)? onImagePaste;
 
   @override
   QuillEditorState createState() => QuillEditorState();
@@ -418,6 +442,9 @@ class QuillEditorState extends State<QuillEditor>
           theme.colorScheme.primary.withOpacity(0.40);
     }
 
+    final showSelectionToolbar =
+        widget.enableInteractiveSelection && widget.enableSelectionToolbar;
+
     final child = RawEditor(
       key: _editorKey,
       controller: widget.controller,
@@ -430,10 +457,10 @@ class QuillEditorState extends State<QuillEditor>
       placeholder: widget.placeholder,
       onLaunchUrl: widget.onLaunchUrl,
       toolbarOptions: ToolbarOptions(
-        copy: widget.enableInteractiveSelection,
-        cut: widget.enableInteractiveSelection,
-        paste: widget.enableInteractiveSelection,
-        selectAll: widget.enableInteractiveSelection,
+        copy: showSelectionToolbar,
+        cut: showSelectionToolbar,
+        paste: showSelectionToolbar,
+        selectAll: showSelectionToolbar,
       ),
       showSelectionHandles: isMobile(theme.platform),
       showCursor: widget.showCursor,
@@ -458,18 +485,28 @@ class QuillEditorState extends State<QuillEditor>
       keyboardAppearance: widget.keyboardAppearance,
       enableInteractiveSelection: widget.enableInteractiveSelection,
       scrollPhysics: widget.scrollPhysics,
-      embedBuilder: widget.embedBuilder,
+      embedBuilder: (
+        context,
+        controller,
+        node,
+        readOnly,
+      ) =>
+          _buildCustomBlockEmbed(node, context, controller, readOnly),
       linkActionPickerDelegate: widget.linkActionPickerDelegate,
       customStyleBuilder: widget.customStyleBuilder,
       floatingCursorDisabled: widget.floatingCursorDisabled,
+      onImagePaste: widget.onImagePaste,
     );
 
     final editor = I18n(
-        initialLocale: widget.locale,
-        child: _selectionGestureDetectorBuilder.build(
-          behavior: HitTestBehavior.translucent,
-          child: child,
-        ));
+      initialLocale: widget.locale,
+      child: selectionEnabled
+          ? _selectionGestureDetectorBuilder.build(
+              behavior: HitTestBehavior.translucent,
+              child: child,
+            )
+          : child,
+    );
 
     if (kIsWeb) {
       // Intercept RawKeyEvent on Web to prevent it from propagating to parents
@@ -486,6 +523,32 @@ class QuillEditorState extends State<QuillEditor>
     }
 
     return editor;
+  }
+
+  Widget _buildCustomBlockEmbed(Embed node, BuildContext context,
+      QuillController controller, bool readOnly) {
+    final builders = widget.embedBuilders;
+
+    if (builders != null) {
+      var _node = node;
+
+      // Creates correct node for custom embed
+      if (node.value.type == BlockEmbed.customType) {
+        _node = Embed(CustomBlockEmbed.fromJsonString(node.value.data));
+      }
+
+      for (final builder in builders) {
+        if (builder.key == _node.value.type) {
+          return builder.build(context, controller, _node, readOnly);
+        }
+      }
+    }
+
+    throw UnimplementedError(
+      'Embeddable type "${node.value.type}" is not supported by supplied '
+      'embed builders. You must pass your own builder function to '
+      'embedBuilders property of QuillEditor or QuillField widgets.',
+    );
   }
 
   @override
@@ -600,7 +663,8 @@ class _QuillEditorSelectionGestureDetectorBuilder
     try {
       if (delegate.selectionEnabled && !_isPositionSelected(details)) {
         final _platform = Theme.of(_state.context).platform;
-        if (isAppleOS(_platform)) {
+        if (isAppleOS(_platform) || isDesktop()) {
+          // added isDesktop() to enable extend selection in Windows platform
           switch (details.kind) {
             case PointerDeviceKind.mouse:
             case PointerDeviceKind.stylus:
@@ -1571,8 +1635,7 @@ class RenderEditor extends RenderEditableContainerBox
   }
 }
 
-class QuillVerticalCaretMovementRun
-    extends BidirectionalIterator<TextPosition> {
+class QuillVerticalCaretMovementRun extends Iterator<TextPosition> {
   QuillVerticalCaretMovementRun._(
     this._editor,
     this._currentTextPosition,
@@ -1593,7 +1656,6 @@ class QuillVerticalCaretMovementRun
     return true;
   }
 
-  @override
   bool movePrevious() {
     _currentTextPosition = _editor.getTextPositionAbove(_currentTextPosition);
     return true;

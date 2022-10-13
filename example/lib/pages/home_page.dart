@@ -7,7 +7,9 @@ import 'package:filesystem_picker/filesystem_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/extensions.dart';
 import 'package:flutter_quill/flutter_quill.dart' hide Text;
+import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tuple/tuple.dart';
@@ -32,7 +34,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadFromAssets() async {
     try {
-      final result = await rootBundle.loadString('assets/sample_data.json');
+      final result = await rootBundle.loadString(isDesktop()
+          ? 'assets/sample_data_nomedia.json'
+          : 'assets/sample_data.json');
       final doc = Document.fromJson(jsonDecode(result));
       setState(() {
         _controller = QuillController(
@@ -61,7 +65,12 @@ class _HomePageState extends State<HomePage> {
         title: const Text(
           'Flutter Quill',
         ),
-        actions: [],
+        actions: [
+          IconButton(
+            onPressed: () => _addEditNote(context),
+            icon: const Icon(Icons.note_add),
+          ),
+        ],
       ),
       drawer: Container(
         constraints:
@@ -92,28 +101,35 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildWelcomeEditor(BuildContext context) {
     var quillEditor = QuillEditor(
-        controller: _controller!,
-        scrollController: ScrollController(),
-        scrollable: true,
-        focusNode: _focusNode,
-        autoFocus: false,
-        readOnly: false,
-        placeholder: 'Add content',
-        expands: false,
-        padding: EdgeInsets.zero,
-        customStyles: DefaultStyles(
-          h1: DefaultTextBlockStyle(
-              const TextStyle(
-                fontSize: 32,
-                color: Colors.black,
-                height: 1.15,
-                fontWeight: FontWeight.w300,
-              ),
-              const Tuple2(16, 0),
-              const Tuple2(0, 0),
-              null),
-          sizeSmall: const TextStyle(fontSize: 9),
-        ));
+      controller: _controller!,
+      scrollController: ScrollController(),
+      scrollable: true,
+      focusNode: _focusNode,
+      autoFocus: false,
+      readOnly: false,
+      placeholder: 'Add content',
+      enableSelectionToolbar: isMobile(),
+      expands: false,
+      padding: EdgeInsets.zero,
+      onImagePaste: _onImagePaste,
+      customStyles: DefaultStyles(
+        h1: DefaultTextBlockStyle(
+            const TextStyle(
+              fontSize: 32,
+              color: Colors.black,
+              height: 1.15,
+              fontWeight: FontWeight.w300,
+            ),
+            const Tuple2(16, 0),
+            const Tuple2(0, 0),
+            null),
+        sizeSmall: const TextStyle(fontSize: 9),
+      ),
+      embedBuilders: [
+        ...FlutterQuillEmbeds.builders(),
+        NotesEmbedBuilder(addEditNote: _addEditNote)
+      ],
+    );
     if (kIsWeb) {
       quillEditor = QuillEditor(
           controller: _controller!,
@@ -138,33 +154,44 @@ class _HomePageState extends State<HomePage> {
                 null),
             sizeSmall: const TextStyle(fontSize: 9),
           ),
-          embedBuilder: defaultEmbedBuilderWeb);
+          embedBuilders: defaultEmbedBuildersWeb);
     }
     var toolbar = QuillToolbar.basic(
       controller: _controller!,
-      // provide a callback to enable picking images from device.
-      // if omit, "image" button only allows adding images from url.
-      // same goes for videos.
-      onImagePickCallback: _onImagePickCallback,
-      onVideoPickCallback: _onVideoPickCallback,
-      // uncomment to provide a custom "pick from" dialog.
-      // mediaPickSettingSelector: _selectMediaPickSetting,
+      embedButtons: FlutterQuillEmbeds.buttons(
+        // provide a callback to enable picking images from device.
+        // if omit, "image" button only allows adding images from url.
+        // same goes for videos.
+        onImagePickCallback: _onImagePickCallback,
+        onVideoPickCallback: _onVideoPickCallback,
+        // uncomment to provide a custom "pick from" dialog.
+        // mediaPickSettingSelector: _selectMediaPickSetting,
+        // uncomment to provide a custom "pick from" dialog.
+        // cameraPickSettingSelector: _selectCameraPickSetting,
+      ),
       showAlignmentButtons: true,
+      afterButtonPressed: _focusNode.requestFocus,
     );
     if (kIsWeb) {
       toolbar = QuillToolbar.basic(
         controller: _controller!,
-        onImagePickCallback: _onImagePickCallback,
-        webImagePickImpl: _webImagePickImpl,
+        embedButtons: FlutterQuillEmbeds.buttons(
+          onImagePickCallback: _onImagePickCallback,
+          webImagePickImpl: _webImagePickImpl,
+        ),
         showAlignmentButtons: true,
+        afterButtonPressed: _focusNode.requestFocus,
       );
     }
     if (_isDesktop()) {
       toolbar = QuillToolbar.basic(
         controller: _controller!,
-        onImagePickCallback: _onImagePickCallback,
-        filePickImpl: openFileSystemPickerForDesktop,
+        embedButtons: FlutterQuillEmbeds.buttons(
+          onImagePickCallback: _onImagePickCallback,
+          filePickImpl: openFileSystemPickerForDesktop,
+        ),
         showAlignmentButtons: true,
+        afterButtonPressed: _focusNode.requestFocus,
       );
     }
 
@@ -264,6 +291,30 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
+  // ignore: unused_element
+  Future<MediaPickSetting?> _selectCameraPickSetting(BuildContext context) =>
+      showDialog<MediaPickSetting>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          contentPadding: EdgeInsets.zero,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.camera),
+                label: const Text('Capture a photo'),
+                onPressed: () => Navigator.pop(ctx, MediaPickSetting.Camera),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.video_call),
+                label: const Text('Capture a video'),
+                onPressed: () => Navigator.pop(ctx, MediaPickSetting.Video),
+              )
+            ],
+          ),
+        ),
+      );
+
   Widget _buildMenuBar(BuildContext context) {
     final size = MediaQuery.of(context).size;
     const itemStyle = TextStyle(
@@ -297,6 +348,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _readOnly() {
+    Navigator.pop(super.context);
     Navigator.push(
       super.context,
       MaterialPageRoute(
@@ -304,4 +356,106 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  Future<String> _onImagePaste(Uint8List imageBytes) async {
+    // Saves the image to applications directory
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final file = await File(
+            '${appDocDir.path}/${basename('${DateTime.now().millisecondsSinceEpoch}.png')}')
+        .writeAsBytes(imageBytes, flush: true);
+    return file.path.toString();
+  }
+
+  Future<void> _addEditNote(BuildContext context, {Document? document}) async {
+    final isEditing = document != null;
+    final quillEditorController = QuillController(
+      document: document ?? Document(),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        titlePadding: const EdgeInsets.only(left: 16, top: 8),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('${isEditing ? 'Edit' : 'Add'} note'),
+            IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close),
+            )
+          ],
+        ),
+        content: QuillEditor.basic(
+          controller: quillEditorController,
+          readOnly: false,
+        ),
+      ),
+    );
+
+    if (quillEditorController.document.isEmpty()) return;
+
+    final block = BlockEmbed.custom(
+      NotesBlockEmbed.fromDocument(quillEditorController.document),
+    );
+    final controller = _controller!;
+    final index = controller.selection.baseOffset;
+    final length = controller.selection.extentOffset - index;
+
+    if (isEditing) {
+      final offset = getEmbedNode(controller, controller.selection.start).item1;
+      controller.replaceText(
+          offset, 1, block, TextSelection.collapsed(offset: offset));
+    } else {
+      controller.replaceText(index, length, block, null);
+    }
+  }
+}
+
+class NotesEmbedBuilder implements EmbedBuilder {
+  NotesEmbedBuilder({required this.addEditNote});
+
+  Future<void> Function(BuildContext context, {Document? document}) addEditNote;
+
+  @override
+  String get key => 'notes';
+
+  @override
+  Widget build(
+    BuildContext context,
+    QuillController controller,
+    Embed node,
+    bool readOnly,
+  ) {
+    final notes = NotesBlockEmbed(node.value.data).document;
+
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        title: Text(
+          notes.toPlainText().replaceAll('\n', ' '),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        leading: const Icon(Icons.notes),
+        onTap: () => addEditNote(context, document: notes),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: Colors.grey),
+        ),
+      ),
+    );
+  }
+}
+
+class NotesBlockEmbed extends CustomBlockEmbed {
+  const NotesBlockEmbed(String value) : super(noteType, value);
+
+  static const String noteType = 'notes';
+
+  static NotesBlockEmbed fromDocument(Document document) =>
+      NotesBlockEmbed(jsonEncode(document.toDelta().toJson()));
+
+  Document get document => Document.fromJson(jsonDecode(data));
 }

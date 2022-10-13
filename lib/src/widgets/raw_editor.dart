@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+// ignore: unnecessary_import
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
+import 'package:pasteboard/pasteboard.dart';
 import 'package:tuple/tuple.dart';
 
 import '../models/documents/attribute.dart';
@@ -19,14 +22,13 @@ import '../models/documents/nodes/line.dart';
 import '../models/documents/nodes/node.dart';
 import '../models/documents/style.dart';
 import '../utils/delta.dart';
+import '../utils/embeds.dart';
 import '../utils/platform.dart';
 import 'controller.dart';
 import 'cursor.dart';
 import 'default_styles.dart';
 import 'delegate.dart';
 import 'editor.dart';
-import 'embeds/default_embed_builder.dart';
-import 'embeds/image.dart';
 import 'keyboard_listener.dart';
 import 'link.dart';
 import 'proxy.dart';
@@ -46,6 +48,7 @@ class RawEditor extends StatefulWidget {
       required this.cursorStyle,
       required this.selectionColor,
       required this.selectionCtrls,
+      required this.embedBuilder,
       Key? key,
       this.scrollable = true,
       this.padding = EdgeInsets.zero,
@@ -70,10 +73,10 @@ class RawEditor extends StatefulWidget {
       this.keyboardAppearance = Brightness.light,
       this.enableInteractiveSelection = true,
       this.scrollPhysics,
-      this.embedBuilder = defaultEmbedBuilder,
       this.linkActionPickerDelegate = defaultLinkActionPickerDelegate,
       this.customStyleBuilder,
-      this.floatingCursorDisabled = false})
+      this.floatingCursorDisabled = false,
+      this.onImagePaste})
       : assert(maxHeight == null || maxHeight > 0, 'maxHeight cannot be null'),
         assert(minHeight == null || minHeight >= 0, 'minHeight cannot be null'),
         assert(maxHeight == null || minHeight == null || maxHeight >= minHeight,
@@ -220,8 +223,10 @@ class RawEditor extends StatefulWidget {
   /// See [Scrollable.physics].
   final ScrollPhysics? scrollPhysics;
 
+  final Future<String?> Function(Uint8List imageBytes)? onImagePaste;
+
   /// Builder function for embeddable objects.
-  final EmbedBuilder embedBuilder;
+  final EmbedsBuilder embedBuilder;
   final LinkActionPickerDelegate linkActionPickerDelegate;
   final CustomStyleBuilder? customStyleBuilder;
   final bool floatingCursorDisabled;
@@ -284,7 +289,7 @@ class RawEditorState extends EditorState
     assert(debugCheckHasMediaQuery(context));
     super.build(context);
 
-    var _doc = widget.controller.document;
+    var _doc = controller.document;
     if (_doc.isEmpty() && widget.placeholder != null) {
       _doc = Document.fromJson(jsonDecode(
           '[{"attributes":{"placeholder":true},"insert":"${widget.placeholder}\\n"}]'));
@@ -296,7 +301,7 @@ class RawEditorState extends EditorState
         child: _Editor(
           key: _editorKey,
           document: _doc,
-          selection: widget.controller.selection,
+          selection: controller.selection,
           hasFocus: _hasFocus,
           scrollable: widget.scrollable,
           cursorController: _cursorCont,
@@ -335,7 +340,7 @@ class RawEditorState extends EditorState
               key: _editorKey,
               offset: offset,
               document: _doc,
-              selection: widget.controller.selection,
+              selection: controller.selection,
               hasFocus: _hasFocus,
               scrollable: widget.scrollable,
               textDirection: _textDirection,
@@ -363,14 +368,25 @@ class RawEditorState extends EditorState
 
     return QuillStyles(
       data: _styles!,
-      child: Actions(
-        actions: _actions,
-        child: Focus(
-          focusNode: widget.focusNode,
-          child: QuillKeyboardListener(
-            child: Container(
-              constraints: constraints,
-              child: child,
+      child: Shortcuts(
+        shortcuts: <LogicalKeySet, Intent>{
+          // shortcuts added for Windows platform
+          LogicalKeySet(LogicalKeyboardKey.escape):
+              const HideSelectionToolbarIntent(),
+          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyZ):
+              const UndoTextIntent(SelectionChangedCause.keyboard),
+          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyY):
+              const RedoTextIntent(SelectionChangedCause.keyboard),
+        },
+        child: Actions(
+          actions: _actions,
+          child: Focus(
+            focusNode: widget.focusNode,
+            child: QuillKeyboardListener(
+              child: Container(
+                constraints: constraints,
+                child: child,
+              ),
             ),
           ),
         ),
@@ -380,8 +396,8 @@ class RawEditorState extends EditorState
 
   void _handleSelectionChanged(
       TextSelection selection, SelectionChangedCause cause) {
-    final oldSelection = widget.controller.selection;
-    widget.controller.updateSelection(selection, ChangeSource.LOCAL);
+    final oldSelection = controller.selection;
+    controller.updateSelection(selection, ChangeSource.LOCAL);
 
     _selectionOverlay?.handlesVisible = _shouldShowSelectionHandles();
 
@@ -403,7 +419,7 @@ class RawEditorState extends EditorState
   }
 
   void _handleSelectionCompleted() {
-    widget.controller.onSelectionCompleted?.call();
+    controller.onSelectionCompleted?.call();
   }
 
   /// Updates the checkbox positioned at [offset] in document
@@ -411,23 +427,25 @@ class RawEditorState extends EditorState
   void _handleCheckboxTap(int offset, bool value) {
     if (!widget.readOnly) {
       _disableScrollControllerAnimateOnce = true;
-      widget.controller.ignoreFocusOnTextChange = true;
-      final currentSelection = widget.controller.selection.copyWith();
+      final currentSelection = controller.selection.copyWith();
       final attribute = value ? Attribute.checked : Attribute.unchecked;
 
-      widget.controller.formatText(offset, 0, attribute);
+      controller
+        ..ignoreFocusOnTextChange = true
+        ..formatText(offset, 0, attribute)
 
-      // Checkbox tapping causes controller.selection to go to offset 0
-      // Stop toggling those two toolbar buttons
-      widget.controller.toolbarButtonToggler = {
-        Attribute.list.key: attribute,
-        Attribute.header.key: Attribute.header
-      };
+        // Checkbox tapping causes controller.selection to go to offset 0
+        // Stop toggling those two toolbar buttons
+        ..toolbarButtonToggler = {
+          Attribute.list.key: attribute,
+          Attribute.header.key: Attribute.header
+        };
 
       // Go back from offset 0 to current selection
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        widget.controller.ignoreFocusOnTextChange = false;
-        widget.controller.updateSelection(currentSelection, ChangeSource.LOCAL);
+        controller
+          ..ignoreFocusOnTextChange = false
+          ..updateSelection(currentSelection, ChangeSource.LOCAL);
       });
     }
   }
@@ -444,11 +462,11 @@ class RawEditorState extends EditorState
         final attrs = node.style.attributes;
         final editableTextBlock = EditableTextBlock(
             block: node,
-            controller: widget.controller,
+            controller: controller,
             textDirection: _textDirection,
             scrollBottomInset: widget.scrollBottomInset,
             verticalSpacing: _getVerticalSpacingForBlock(node, _styles),
-            textSelection: widget.controller.selection,
+            textSelection: controller.selection,
             color: widget.selectionColor,
             styles: _styles,
             enableInteractiveSelection: widget.enableInteractiveSelection,
@@ -482,7 +500,7 @@ class RawEditorState extends EditorState
       customStyleBuilder: widget.customStyleBuilder,
       styles: _styles!,
       readOnly: widget.readOnly,
-      controller: widget.controller,
+      controller: controller,
       linkActionPicker: _linkActionPicker,
       onLaunchUrl: widget.onLaunchUrl,
     );
@@ -493,7 +511,7 @@ class RawEditorState extends EditorState
         0,
         _getVerticalSpacingForLine(node, _styles),
         _textDirection,
-        widget.controller.selection,
+        controller.selection,
         widget.selectionColor,
         widget.enableInteractiveSelection,
         _hasFocus,
@@ -550,8 +568,8 @@ class RawEditorState extends EditorState
 
     _clipboardStatus.addListener(_onChangedClipboardStatus);
 
-    widget.controller.addListener(() {
-      _didChangeTextEditingValue(widget.controller.ignoreFocusOnTextChange);
+    controller.addListener(() {
+      _didChangeTextEditingValue(controller.ignoreFocusOnTextChange);
     });
 
     _scrollController = widget.scrollController;
@@ -641,9 +659,9 @@ class RawEditorState extends EditorState
     _cursorCont.show.value = widget.showCursor;
     _cursorCont.style = widget.cursorStyle;
 
-    if (widget.controller != oldWidget.controller) {
+    if (controller != oldWidget.controller) {
       oldWidget.controller.removeListener(_didChangeTextEditingValue);
-      widget.controller.addListener(_didChangeTextEditingValue);
+      controller.addListener(_didChangeTextEditingValue);
       updateRemoteValueIfNeeded();
     }
 
@@ -659,7 +677,7 @@ class RawEditorState extends EditorState
       updateKeepAlive();
     }
 
-    if (widget.controller.selection != oldWidget.controller.selection) {
+    if (controller.selection != oldWidget.controller.selection) {
       _selectionOverlay?.update(textEditingValue);
     }
 
@@ -679,8 +697,7 @@ class RawEditorState extends EditorState
   }
 
   bool _shouldShowSelectionHandles() {
-    return widget.showSelectionHandles &&
-        !widget.controller.selection.isCollapsed;
+    return widget.showSelectionHandles && !controller.selection.isCollapsed;
   }
 
   @override
@@ -691,7 +708,7 @@ class RawEditorState extends EditorState
     assert(!hasConnection);
     _selectionOverlay?.dispose();
     _selectionOverlay = null;
-    widget.controller.removeListener(_didChangeTextEditingValue);
+    controller.removeListener(_didChangeTextEditingValue);
     widget.focusNode.removeListener(_handleFocusChanged);
     _cursorCont.dispose();
     _clipboardStatus
@@ -719,7 +736,7 @@ class RawEditorState extends EditorState
       requestKeyboard();
       if (mounted) {
         setState(() {
-          // Use widget.controller.value in build()
+          // Use controller.value in build()
           // Trigger build and updateChildren
         });
       }
@@ -734,8 +751,7 @@ class RawEditorState extends EditorState
       return;
     }
     _showCaretOnScreen();
-    _cursorCont.startOrStopCursorTimerIfNeeded(
-        _hasFocus, widget.controller.selection);
+    _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, controller.selection);
     if (hasConnection) {
       // To keep the cursor from blinking while typing, we want to restart the
       // cursor timer every time a new character is typed.
@@ -758,7 +774,7 @@ class RawEditorState extends EditorState
     });
     if (mounted) {
       setState(() {
-        // Use widget.controller.value in build()
+        // Use controller.value in build()
         // Trigger build and updateChildren
       });
     }
@@ -792,8 +808,7 @@ class RawEditorState extends EditorState
 
   void _handleFocusChanged() {
     openOrCloseConnection();
-    _cursorCont.startOrStopCursorTimerIfNeeded(
-        _hasFocus, widget.controller.selection);
+    _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, controller.selection);
     _updateOrDisposeSelectionOverlayIfNeeded();
     if (_hasFocus) {
       WidgetsBinding.instance.addObserver(this);
@@ -882,6 +897,10 @@ class RawEditorState extends EditorState
   /// keyboard become visible.
   @override
   void requestKeyboard() {
+    if (controller.skipRequestKeyboard) {
+      controller.skipRequestKeyboard = false;
+      return;
+    }
     if (_hasFocus) {
       openConnectionIfNeeded();
       _showCaretOnScreen();
@@ -931,9 +950,9 @@ class RawEditorState extends EditorState
   /// Copy current selection to [Clipboard].
   @override
   void copySelection(SelectionChangedCause cause) {
-    widget.controller.copiedImageUrl = null;
-    _pastePlainText = widget.controller.getPlainText();
-    _pasteStyle = widget.controller.getAllIndividualSelectionStyles();
+    controller.copiedImageUrl = null;
+    _pastePlainText = controller.getPlainText();
+    _pasteStyle = controller.getAllIndividualSelectionStyles();
 
     final selection = textEditingValue.selection;
     final text = textEditingValue.text;
@@ -960,9 +979,9 @@ class RawEditorState extends EditorState
   /// Cut current selection to [Clipboard].
   @override
   void cutSelection(SelectionChangedCause cause) {
-    widget.controller.copiedImageUrl = null;
-    _pastePlainText = widget.controller.getPlainText();
-    _pasteStyle = widget.controller.getAllIndividualSelectionStyles();
+    controller.copiedImageUrl = null;
+    _pastePlainText = controller.getPlainText();
+    _pasteStyle = controller.getAllIndividualSelectionStyles();
 
     if (widget.readOnly) {
       return;
@@ -988,19 +1007,17 @@ class RawEditorState extends EditorState
       return;
     }
 
-    if (widget.controller.copiedImageUrl != null) {
+    if (controller.copiedImageUrl != null) {
       final index = textEditingValue.selection.baseOffset;
       final length = textEditingValue.selection.extentOffset - index;
-      final copied = widget.controller.copiedImageUrl!;
-      widget.controller
-          .replaceText(index, length, BlockEmbed.image(copied.item1), null);
+      final copied = controller.copiedImageUrl!;
+      controller.replaceText(
+          index, length, BlockEmbed.image(copied.item1), null);
       if (copied.item2.isNotEmpty) {
-        widget.controller.formatText(
-            getImageNode(widget.controller, index + 1).item1,
-            1,
+        controller.formatText(getEmbedNode(controller, index + 1).item1, 1,
             StyleAttribute(copied.item2));
       }
-      widget.controller.copiedImageUrl = null;
+      controller.copiedImageUrl = null;
       await Clipboard.setData(const ClipboardData(text: ''));
       return;
     }
@@ -1011,25 +1028,45 @@ class RawEditorState extends EditorState
     }
     // Snapshot the input before using `await`.
     // See https://github.com/flutter/flutter/issues/11427
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (data == null) {
+    final text = await Clipboard.getData(Clipboard.kTextPlain);
+    if (text != null) {
+      _replaceText(
+          ReplaceTextIntent(textEditingValue, text.text!, selection, cause));
+
+      bringIntoView(textEditingValue.selection.extent);
+
+      // Collapse the selection and hide the toolbar and handles.
+      userUpdateTextEditingValue(
+        TextEditingValue(
+          text: textEditingValue.text,
+          selection:
+              TextSelection.collapsed(offset: textEditingValue.selection.end),
+        ),
+        cause,
+      );
+
       return;
     }
 
-    _replaceText(
-        ReplaceTextIntent(textEditingValue, data.text!, selection, cause));
+    if (widget.onImagePaste != null) {
+      final image = await Pasteboard.image;
 
-    bringIntoView(textEditingValue.selection.extent);
+      if (image == null) {
+        return;
+      }
 
-    // Collapse the selection and hide the toolbar and handles.
-    userUpdateTextEditingValue(
-      TextEditingValue(
-        text: textEditingValue.text,
-        selection:
-            TextSelection.collapsed(offset: textEditingValue.selection.end),
-      ),
-      cause,
-    );
+      final imageUrl = await widget.onImagePaste!(image);
+      if (imageUrl == null) {
+        return;
+      }
+
+      controller.replaceText(
+        textEditingValue.selection.end,
+        0,
+        BlockEmbed.image(imageUrl),
+        null,
+      );
+    }
   }
 
   /// Select the entire text value.
@@ -1172,6 +1209,11 @@ class RawEditorState extends EditorState
     CopySelectionTextIntent: _makeOverridable(_CopySelectionAction(this)),
     PasteTextIntent: _makeOverridable(CallbackAction<PasteTextIntent>(
         onInvoke: (intent) => pasteText(intent.cause))),
+
+    HideSelectionToolbarIntent:
+        _makeOverridable(_HideSelectionToolbarAction(this)),
+    UndoTextIntent: _makeOverridable(_UndoKeyboardAction(this)),
+    RedoTextIntent: _makeOverridable(_RedoKeyboardAction(this)),
   };
 
   @override
@@ -1775,7 +1817,7 @@ class _UpdateTextSelectionToAdjacentLineAction<
       return;
     }
     _runSelection = state.textEditingValue.selection;
-    final currentSelection = state.widget.controller.selection;
+    final currentSelection = state.controller.selection;
     final continueCurrentRun = currentSelection.isValid &&
         currentSelection.isCollapsed &&
         currentSelection.baseOffset == runSelection.baseOffset &&
@@ -1867,4 +1909,56 @@ class _CopySelectionAction extends ContextAction<CopySelectionTextIntent> {
   bool get isActionEnabled =>
       state.textEditingValue.selection.isValid &&
       !state.textEditingValue.selection.isCollapsed;
+}
+
+//Intent class for "escape" key to dismiss selection toolbar in Windows platform
+class HideSelectionToolbarIntent extends Intent {
+  const HideSelectionToolbarIntent();
+}
+
+class _HideSelectionToolbarAction
+    extends ContextAction<HideSelectionToolbarIntent> {
+  _HideSelectionToolbarAction(this.state);
+
+  final RawEditorState state;
+
+  @override
+  void invoke(HideSelectionToolbarIntent intent, [BuildContext? context]) {
+    state.hideToolbar();
+  }
+
+  @override
+  bool get isActionEnabled => state.textEditingValue.selection.isValid;
+}
+
+class _UndoKeyboardAction extends ContextAction<UndoTextIntent> {
+  _UndoKeyboardAction(this.state);
+
+  final RawEditorState state;
+
+  @override
+  void invoke(UndoTextIntent intent, [BuildContext? context]) {
+    if (state.controller.hasUndo) {
+      state.controller.undo();
+    }
+  }
+
+  @override
+  bool get isActionEnabled => true;
+}
+
+class _RedoKeyboardAction extends ContextAction<RedoTextIntent> {
+  _RedoKeyboardAction(this.state);
+
+  final RawEditorState state;
+
+  @override
+  void invoke(RedoTextIntent intent, [BuildContext? context]) {
+    if (state.controller.hasRedo) {
+      state.controller.redo();
+    }
+  }
+
+  @override
+  bool get isActionEnabled => true;
 }
