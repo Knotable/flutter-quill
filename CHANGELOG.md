@@ -1,3 +1,67 @@
+# [6.3.2]
+* Added `unknownEmbedBuilder` to QuillEditor.
+* Fix error style when input chinese japanese or korean.
+
+# [6.3.1]
+* Add color property to the basic factory function.
+
+# [6.3.0]
+* Support Flutter 3.7.
+
+# [6.2.2]
+* Fix: nextLine getter null where no assertion.
+
+# [6.2.1]
+* Revert "Align numerical and bullet lists along with text content".
+
+# [6.2.0]
+* Align numerical and bullet lists along with text content.
+
+# [6.1.12]
+* Apply i18n for default font dropdown option labels corresponding to 'Clear'.
+
+# [6.1.11]
+* Remove iOS hack for delaying focus calculation.
+
+# [6.1.10]
+* Delay focus calculation for iOS.
+
+# [6.1.9]
+* Bump keyboard show up wait to 1 sec.
+
+# [6.1.8]
+* Recalculate focus when showing keyboard.
+
+# [6.1.7]
+* Add czech localizations.
+
+# [6.1.6]
+* Upgrade i18n_extension to 6.0.0.
+
+# [6.1.5]
+* Fix formatting exception.
+
+# [6.1.4]
+* Add double quotes validation.
+
+# [6.1.3]
+* Revert "fix order list numbering (#988)".
+
+# [6.1.2]
+* Add typing shortcuts.
+
+# [6.1.1]
+* Fix order list numbering.
+
+# [6.1.0]
+* Add keyboard shortcuts for editor actions.
+
+# [6.0.10]
+* Upgrade device info plus to ^7.0.0.
+
+# [6.0.9]
+* Don't throw showAutocorrectionPromptRect not implemented. The function is called with every keystroke as a user is typing.
+
 # [6.0.8+1]
 * Fixes null pointer when setting documents.
 
