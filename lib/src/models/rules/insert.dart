@@ -29,17 +29,14 @@ class PreserveLineStyleOnSplitRule extends InsertRule {
   const PreserveLineStyleOnSplitRule();
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is! String || data != '\n') {
       return null;
     }
 
     final itr = DeltaIterator(document);
     final before = itr.skip(index);
-    if (before == null ||
-        before.data is! String ||
-        (before.data as String).endsWith('\n')) {
+    if (before == null || before.data is! String || (before.data as String).endsWith('\n')) {
       return null;
     }
     final after = itr.next();
@@ -74,8 +71,7 @@ class PreserveBlockStyleOnInsertRule extends InsertRule {
   const PreserveBlockStyleOnInsertRule();
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is! String || !data.contains('\n')) {
       // Only interested in text containing at least one newline character.
       return null;
@@ -85,8 +81,7 @@ class PreserveBlockStyleOnInsertRule extends InsertRule {
 
     // Look for the next newline.
     final nextNewLine = _getNextNewLine(itr);
-    final lineStyle =
-        Style.fromJson(nextNewLine.item1?.attributes ?? <String, dynamic>{});
+    final lineStyle = Style.fromJson(nextNewLine.item1?.attributes ?? <String, dynamic>{});
 
     final blockStyle = lineStyle.getBlocksExceptHeader();
     // Are we currently in a block? If not then ignore.
@@ -117,8 +112,8 @@ class PreserveBlockStyleOnInsertRule extends InsertRule {
         // we don't want to insert a newline after the last chunk of text, so -1
         final blockAttributes = blockStyle.isEmpty
             ? null
-            : blockStyle.map<String, dynamic>((_, attribute) =>
-                MapEntry<String, dynamic>(attribute.key, attribute.value));
+            : blockStyle
+                .map<String, dynamic>((_, attribute) => MapEntry<String, dynamic>(attribute.key, attribute.value));
         delta.insert('\n', blockAttributes);
       }
     }
@@ -155,8 +150,7 @@ class AutoExitBlockRule extends InsertRule {
   }
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is! String || data != '\n') {
       return null;
     }
@@ -190,8 +184,7 @@ class AutoExitBlockRule extends InsertRule {
     final nextNewLine = _getNextNewLine(itr);
     if (nextNewLine.item1 != null &&
         nextNewLine.item1!.attributes != null &&
-        Style.fromJson(nextNewLine.item1!.attributes).getBlockExceptHeader() ==
-            blockStyle) {
+        Style.fromJson(nextNewLine.item1!.attributes).getBlockExceptHeader() == blockStyle) {
       // We are not at the end of this block, ignore.
       return null;
     }
@@ -199,8 +192,7 @@ class AutoExitBlockRule extends InsertRule {
     // Here we now know that the line after `cur` is not in the same block
     // therefore we can exit this block.
     final attributes = cur.attributes ?? <String, dynamic>{};
-    final k =
-        attributes.keys.firstWhere(Attribute.blockKeysExceptHeader.contains);
+    final k = attributes.keys.firstWhere(Attribute.blockKeysExceptHeader.contains);
     attributes[k] = null;
     // retain(1) should be '\n', set it with no attribute
     return Delta()
@@ -218,8 +210,7 @@ class ResetLineFormatOnNewLineRule extends InsertRule {
   const ResetLineFormatOnNewLineRule();
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is! String || data != '\n') {
       return null;
     }
@@ -231,8 +222,7 @@ class ResetLineFormatOnNewLineRule extends InsertRule {
     }
 
     Map<String, dynamic>? resetStyle;
-    if (cur.attributes != null &&
-        cur.attributes!.containsKey(Attribute.header.key)) {
+    if (cur.attributes != null && cur.attributes!.containsKey(Attribute.header.key)) {
       resetStyle = Attribute.header.toJson();
     }
     return Delta()
@@ -249,8 +239,7 @@ class InsertEmbedsRule extends InsertRule {
   const InsertEmbedsRule();
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is String) {
       return null;
     }
@@ -330,8 +319,7 @@ class AutoFormatMultipleLinksRule extends InsertRule {
   // http://www.example.com/?action=birds&brass=apparatus
   // https://example.net/
   // URL generator tool (https://www.randomlists.com/urls) is used.
-  static const _linkPattern =
-      r'(https?:\/\/|www\.)[\w-\.]+\.[\w-\.]+(\/([\S]+)?)?';
+  static const _linkPattern = r'(https?:\/\/)[\w-\.]+\.[\w-\.]+(\/([\S]+)?)?';
   static final linkRegExp = RegExp(_linkPattern, caseSensitive: false);
 
   @override
@@ -430,8 +418,7 @@ class AutoFormatLinksRule extends InsertRule {
   const AutoFormatLinksRule();
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is! String || data != ' ') {
       return null;
     }
@@ -470,17 +457,14 @@ class PreserveInlineStylesRule extends InsertRule {
   const PreserveInlineStylesRule();
 
   @override
-  Delta? applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta? applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     if (data is! String || data.contains('\n')) {
       return null;
     }
 
     final itr = DeltaIterator(document);
-    final prev = itr.skip(len == 0 ? index : index + 1);
-    if (prev == null ||
-        prev.data is! String ||
-        (prev.data as String).contains('\n')) {
+    final prev = itr.skip(index);
+    if (prev == null || prev.data is! String || (prev.data as String).contains('\n')) {
       return null;
     }
 
@@ -516,8 +500,7 @@ class CatchAllInsertRule extends InsertRule {
   const CatchAllInsertRule();
 
   @override
-  Delta applyRule(Delta document, int index,
-      {int? len, Object? data, Attribute? attribute}) {
+  Delta applyRule(Delta document, int index, {int? len, Object? data, Attribute? attribute}) {
     return Delta()
       ..retain(index + (len ?? 0))
       ..insert(data);
@@ -528,8 +511,7 @@ Tuple2<Operation?, int?> _getNextNewLine(DeltaIterator iterator) {
   Operation op;
   for (var skipped = 0; iterator.hasNext; skipped += op.length!) {
     op = iterator.next();
-    final lineBreak =
-        (op.data is String ? op.data as String? : '')!.indexOf('\n');
+    final lineBreak = (op.data is String ? op.data as String? : '')!.indexOf('\n');
     if (lineBreak >= 0) {
       return Tuple2(op, skipped);
     }
